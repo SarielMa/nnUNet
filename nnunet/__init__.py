@@ -5,6 +5,6 @@ print("\n\nPlease cite the following paper when using nnUNet:\n\nIsensee, F., Ja
 print("If you have questions or suggestions, feel free to open an issue at https://github.com/MIC-DKFZ/nnUNet\n")
 
 import os
-os.environ['CUDA_VISIBLE_DEVICES']='1'
+os.environ['CUDA_VISIBLE_DEVICES']='2'
 
 from . import *
