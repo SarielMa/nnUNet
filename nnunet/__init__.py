@@ -4,4 +4,7 @@ print("\n\nPlease cite the following paper when using nnUNet:\n\nIsensee, F., Ja
       "Nat Methods (2020). https://doi.org/10.1038/s41592-020-01008-z\n\n")
 print("If you have questions or suggestions, feel free to open an issue at https://github.com/MIC-DKFZ/nnUNet\n")
 
+import os
+os.environ['CUDA_VISIBLE_DEVICES']='2'
+
 from . import *
