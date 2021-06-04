@@ -1,5 +1,5 @@
 from setuptools import setup, find_namespace_packages
-
+#this is a test
 setup(name='nnunet',
       packages=find_namespace_packages(include=["nnunet", "nnunet.*"]),
       version='1.6.6',
