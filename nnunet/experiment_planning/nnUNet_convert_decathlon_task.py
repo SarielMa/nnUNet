@@ -11,13 +11,21 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
+import inspect
+import os
+import sys
+curDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+curDir = os.path.dirname(curDir)
+curDir = os.path.dirname(curDir)
+sys.path.insert(0, curDir)
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.configuration import default_num_threads
 from nnunet.experiment_planning.utils import split_4d
 from nnunet.utilities.file_endings import remove_trailing_slash
+#from pathlib import Path
 
 
-def crawl_and_remove_hidden_from_decathlon(folder):
+def crawl_and_remove_hidden_from_decathlon(folder=''):
     folder = remove_trailing_slash(folder)
     assert folder.split('/')[-1].startswith("Task"), "This does not seem to be a decathlon folder. Please give me a " \
                                                      "folder that starts with TaskXX and has the subfolders imagesTr, " \
@@ -46,7 +54,7 @@ def main():
                                                  "This utility will convert 4D MSD data into the format nnU-Net "
                                                  "expects")
     parser.add_argument("-i", help="Input folder. Must point to a TaskXX_TASKNAME folder as downloaded from the MSD "
-                                   "website", required=True)
+                                   "website", default="C:/Research/IMA_on_segmentation/nnUnet/nnUNet/rawData/nnUNet_raw_data/Task05_Prostate")
     parser.add_argument("-p", required=False, default=default_num_threads, type=int,
                         help="Use this to specify how many processes are used to run the script. "
                              "Default is %d" % default_num_threads)

@@ -23,7 +23,8 @@ from nnunet.preprocessing.cropping import get_patient_identifiers_from_cropped_f
 from skimage.morphology import label
 from collections import OrderedDict
 
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 class DatasetAnalyzer(object):
     def __init__(self, folder_with_cropped_data, overwrite=True, num_processes=default_num_threads):
         """

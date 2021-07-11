@@ -22,7 +22,8 @@ import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import *
 from multiprocessing.pool import Pool
 
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 def get_do_separate_z(spacing, anisotropy_threshold=RESAMPLING_SEPARATE_Z_ANISO_THRESHOLD):
     do_separate_z = (np.max(spacing) / np.min(spacing)) > anisotropy_threshold
     return do_separate_z

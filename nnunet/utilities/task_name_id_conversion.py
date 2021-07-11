@@ -17,7 +17,8 @@ from nnunet.paths import nnUNet_raw_data, preprocessing_output_dir, nnUNet_cropp
 from batchgenerators.utilities.file_and_folder_operations import *
 import numpy as np
 
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 def convert_id_to_task_name(task_id: int):
     startswith = "Task%03.0d" % task_id
     if preprocessing_output_dir is not None:

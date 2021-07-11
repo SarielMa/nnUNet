@@ -11,7 +11,13 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-
+import inspect
+import os
+import sys
+curDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+curDir = os.path.dirname(curDir)
+curDir = os.path.dirname(curDir)
+sys.path.insert(0, curDir)
 
 import argparse
 from batchgenerators.utilities.file_and_folder_operations import *
@@ -24,6 +30,8 @@ from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetT
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 
 def main():
     parser = argparse.ArgumentParser()

@@ -28,7 +28,8 @@ from nnunet.paths import *
 from nnunet.preprocessing.cropping import get_case_identifier_from_npz
 from nnunet.training.model_restore import recursive_find_python_class
 
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 class ExperimentPlanner(object):
     def __init__(self, folder_with_cropped_data, preprocessed_output_folder):
         self.folder_with_cropped_data = folder_with_cropped_data

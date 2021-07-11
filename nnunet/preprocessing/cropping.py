@@ -19,7 +19,8 @@ from batchgenerators.utilities.file_and_folder_operations import *
 from multiprocessing import Pool
 from collections import OrderedDict
 
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 def create_nonzero_mask(data):
     from scipy.ndimage import binary_fill_holes
     assert len(data.shape) == 4 or len(data.shape) == 3, "data must have shape (C, X, Y, Z) or shape (C, X, Y)"
@@ -49,12 +50,12 @@ def crop_to_bbox(image, bbox):
 
 
 def get_case_identifier(case):
-    case_identifier = case[0].split("/")[-1].split(".nii.gz")[0][:-5]
+    case_identifier = case[0].split("\\")[-1].split(".nii.gz")[0][:-5]
     return case_identifier
 
 
 def get_case_identifier_from_npz(case):
-    case_identifier = case.split("/")[-1][:-4]
+    case_identifier = case.split("\\")[-1][:-4]
     return case_identifier
 
 
@@ -117,7 +118,7 @@ def crop_to_nonzero(data, seg=None, nonzero_label=-1):
 
 
 def get_patient_identifiers_from_cropped_files(folder):
-    return [i.split("/")[-1][:-4] for i in subfiles(folder, join=True, suffix=".npz")]
+    return [i.split("\\")[-1][:-4] for i in subfiles(folder, join=True, suffix=".npz")]
 
 
 class ImageCropper(object):

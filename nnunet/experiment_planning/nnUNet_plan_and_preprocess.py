@@ -11,7 +11,13 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-
+import inspect
+import os
+import sys
+curDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+curDir = os.path.dirname(curDir)
+curDir = os.path.dirname(curDir)
+sys.path.insert(0, curDir)
 
 import nnunet
 from batchgenerators.utilities.file_and_folder_operations import *
@@ -23,12 +29,13 @@ from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 from nnunet.preprocessing.sanity_checks import verify_dataset_integrity
 from nnunet.training.model_restore import recursive_find_python_class
 
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 def main():
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_ids", nargs="+", help="List of integers belonging to the task ids you wish to run"
+    parser.add_argument("-t", "--task_ids", default =["005"] , nargs="+", help="List of integers belonging to the task ids you wish to run"
                                                             " experiment planning and preprocessing for. Each of these "
                                                             "ids must, have a matching folder 'TaskXXX_' in the raw "
                                                             "data folder")
@@ -49,7 +56,7 @@ def main():
     parser.add_argument("-tf", type=int, required=False, default=8,
                         help="Number of processes used for preprocessing the full resolution data of the 2D U-Net and "
                              "3D U-Net. Don't overdo it or you will run out of RAM")
-    parser.add_argument("--verify_dataset_integrity", required=False, default=False, action="store_true",
+    parser.add_argument("--verify_dataset_integrity", required=False, default=True, action="store_true",
                         help="set this flag to check the dataset integrity. This is useful and should be done once for "
                              "each dataset!")
 
