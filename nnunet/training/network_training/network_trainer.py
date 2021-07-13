@@ -37,7 +37,8 @@ from abc import abstractmethod
 from datetime import datetime
 from tqdm import trange
 from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 
 class NetworkTrainer(object):
     def __init__(self, deterministic=True, fp16=False):
