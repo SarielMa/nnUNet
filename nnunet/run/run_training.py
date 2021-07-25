@@ -35,10 +35,12 @@ def maybe_mkdir_p(directory: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser()
+    """
     parser.add_argument("network")
-    parser.add_argument("network_trainer", default = "nnUNetTrainerV2")
-    parser.add_argument("task", help="can be task name or task id", default = "Task005_MYTASK")
-    parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'', default = "0")
+    parser.add_argument("network_trainer")
+    parser.add_argument("task", help="can be task name or task id")
+    parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
+    """
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
@@ -99,11 +101,16 @@ def main():
                              'Optional. Beta. Use with caution.')
 
     args = parser.parse_args()
-
+    """
     task = args.task
     fold = args.fold
     network = args.network
     network_trainer = args.network_trainer
+    """
+    task = "005"
+    fold = "0"
+    network = "2d"
+    network_trainer = "nnUNetTrainerV2"
     validation_only = args.validation_only
     plans_identifier = args.p
     find_lr = args.find_lr

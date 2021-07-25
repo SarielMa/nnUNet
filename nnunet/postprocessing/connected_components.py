@@ -26,7 +26,8 @@ from nnunet.utilities.sitk_stuff import copy_geometry
 from batchgenerators.utilities.file_and_folder_operations import *
 import shutil
 
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 def load_remove_save(input_file: str, output_file: str, for_which_classes: list,
                      minimum_valid_object_size: dict = None):
     # Only objects larger than minimum_valid_object_size will be removed. Keys in minimum_valid_object_size must

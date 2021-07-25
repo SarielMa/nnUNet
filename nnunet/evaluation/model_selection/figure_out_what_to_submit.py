@@ -25,7 +25,8 @@ from nnunet.postprocessing.consolidate_postprocessing import consolidate_folds, 
 from nnunet.utilities.folder_names import get_output_folder_name
 from nnunet.paths import default_cascade_trainer, default_trainer, default_plans_identifier
 
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 def find_task_name(folder, task_id):
     candidates = subdirs(folder, prefix="Task%03.0d_" % task_id, join=False)
     assert len(candidates) > 0, "no candidate for Task id %d found in folder %s" % (task_id, folder)

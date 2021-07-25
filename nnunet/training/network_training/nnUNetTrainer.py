@@ -44,6 +44,8 @@ from torch.optim import lr_scheduler
 
 matplotlib.use("agg")
 
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
 
 class nnUNetTrainer(NetworkTrainer):
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None,
@@ -586,7 +588,7 @@ class nnUNetTrainer(NetworkTrainer):
 
         for k in self.dataset_val.keys():
             properties = load_pickle(self.dataset[k]['properties_file'])
-            fname = properties['list_of_data_files'][0].split("/")[-1][:-12]
+            fname = properties['list_of_data_files'][0].split("\\")[-1][:-12]
             if overwrite or (not isfile(join(output_folder, fname + ".nii.gz"))) or \
                     (save_softmax and not isfile(join(output_folder, fname + ".npz"))):
                 data = np.load(self.dataset[k]['data_file'])['data']
@@ -639,7 +641,7 @@ class nnUNetTrainer(NetworkTrainer):
 
         # evaluate raw predictions
         self.print_to_log_file("evaluation of raw predictions")
-        task = self.dataset_directory.split("/")[-1]
+        task = self.dataset_directory.split("\\")[-1]
         job_name = self.experiment_name
         _ = aggregate_scores(pred_gt_tuples, labels=list(range(self.num_classes)),
                              json_output_file=join(output_folder, "summary.json"),
