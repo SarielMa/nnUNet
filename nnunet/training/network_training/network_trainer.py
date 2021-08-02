@@ -24,7 +24,7 @@ from torch import nn
 from torch.cuda.amp import GradScaler, autocast
 from torch.optim.lr_scheduler import _LRScheduler
 
-matplotlib.use("agg")
+#matplotlib.use("agg")
 from time import time, sleep
 import torch
 import numpy as np

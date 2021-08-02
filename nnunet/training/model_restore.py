@@ -19,7 +19,9 @@ import importlib
 import pkgutil
 from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 
-
+def maybe_mkdir_p(directory: str) -> None:
+    os.makedirs(directory, exist_ok=True)
+#
 def recursive_find_python_class(folder, trainer_name, current_module):
     tr = None
     for importer, modname, ispkg in pkgutil.iter_modules(folder):
