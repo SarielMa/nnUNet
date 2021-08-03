@@ -37,6 +37,9 @@ from abc import abstractmethod
 from datetime import datetime
 from tqdm import trange
 from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
+from nnunet.training.loss_functions.dice_loss import DiceIndex
+
+
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
 
@@ -874,6 +877,7 @@ class NetworkTrainer(object):
         #---------------------------
         return Xn
 #%% adversarial part
+    """
     def dice(self,Mp, M, reduction='none'):
         # NxKx320x320
         intersection = (Mp*M).sum(dim=(2,3))
@@ -883,10 +887,12 @@ class NetworkTrainer(object):
         return dice
     def dice_loss(self,Zn, Y):
         return 1-self. dice(Zn, Y, 'mean')
-    def run_one_adv(self, data_generator):
-        data_dict = next(data_generator)
+    """
+    def run_one_adv(self, data_dict):
+        self.network.eval()
+        #data_dict = next(data_generator)
         data = data_dict['data']
-        target = data_dict['target']# target is a mask?
+        target = data_dict['target']# target is a mask, but should have two...
         data = maybe_to_torch(data)
         target = maybe_to_torch(target)# only the first target among the six is useful
 
@@ -894,10 +900,14 @@ class NetworkTrainer(object):
             data = to_cuda(data)
             target = to_cuda(target)
         self.optimizer.zero_grad()
-        Xn = self. pgd_attack(self.network, data, target, 0.01, "L2", 20, 0.01/5, use_optimizer=False, loss_fn=self.loss)
+        Xn = self. pgd_attack(self.network, data, target, 0.0, "L2", 20, 0.01/5, use_optimizer=False, loss_fn=self.loss)
         
-        output = self.network(Xn)
-        l = self.loss(output, target)        
+        ret = 0
+        valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            
+            l = valDice(output[0], target[0])        
         #l.backward()
         """
         if run_online_evaluation:
@@ -936,11 +946,15 @@ class NetworkTrainer(object):
         # validation with train=False
         self.network.eval()
         val_losses = []
-        print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
-        for b in range(self.num_val_batches_per_epoch):
-            l = self.run_one_adv(self.val_gen)
-            print ("for this iteration, loss is ", str(l))
+        counter = 0
+        #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
+        for data_dict in self.val_gen:
+            l = self.run_one_adv(data_dict)
+            print ("for this iteration, dice is ", str(l))
             val_losses.append(l)
+            counter +=1
+            if counter >=2:
+                break
             
         self.all_val_losses.append(np.mean(val_losses))
         self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])

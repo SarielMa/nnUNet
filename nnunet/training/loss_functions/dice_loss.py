@@ -127,7 +127,7 @@ def get_tp_fp_fn_tn(net_output, gt, axes=None, mask=None, square=False):
             y_onehot = torch.zeros(shp_x)
             if net_output.device.type == "cuda":
                 y_onehot = y_onehot.cuda(net_output.device.index)
-            y_onehot.scatter_(1, gt, 1)
+            y_onehot.scatter_(1, gt, 1)#?????
 
     tp = net_output * y_onehot
     fp = net_output * (1 - y_onehot)
@@ -193,6 +193,44 @@ class SoftDiceLoss(nn.Module):
 
         return -dc
 
+
+class DiceIndex(nn.Module):
+    def __init__(self, apply_nonlin=softmax_helper, batch_dice=True, do_bg=False):
+        """
+        """
+        super(DiceIndex, self).__init__()
+
+        self.do_bg = do_bg
+        self.batch_dice = batch_dice
+        self.apply_nonlin = apply_nonlin
+
+
+    def forward(self, x, y, loss_mask=None):
+        shp_x = x.shape
+
+        if self.batch_dice:
+            axes = [0] + list(range(2, len(shp_x)))
+        else:
+            axes = list(range(2, len(shp_x)))
+
+        if self.apply_nonlin is not None:
+            x = self.apply_nonlin(x)
+
+        tp, fp, fn, _ = get_tp_fp_fn_tn(x, y, axes, loss_mask, False)
+
+        nominator = 2 * tp 
+        denominator = 2 * tp + fp + fn 
+
+        dc = nominator / (denominator + 1e-8)
+
+        if not self.do_bg:
+            if self.batch_dice:
+                dc = dc[1:]
+            else:
+                dc = dc[:, 1:]
+        dc = dc.mean()
+
+        return dc
 
 class MCCLoss(nn.Module):
     def __init__(self, apply_nonlin=None, batch_mcc=False, do_bg=True, smooth=0.0):
