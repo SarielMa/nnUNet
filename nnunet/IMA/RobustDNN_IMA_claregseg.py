@@ -4,8 +4,26 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as nnF
 from torch import optim
-from RobustDNN_PGD import get_noise_init, normalize_grad_, clip_norm_
+from nnunet.IMA.RobustDNN_PGD import get_noise_init, normalize_grad_, clip_norm_
 #%% classification, see more advanced loss functions in RobustDNN_IMA
+def one_hot_output(net_output, gt):
+    shp_x = net_output.shape
+    shp_y = gt.shape
+    with torch.no_grad():
+        if len(shp_x) != len(shp_y):
+            gt = gt.view((shp_y[0], 1, *shp_y[1:]))
+
+        if all([i == j for i, j in zip(net_output.shape, gt.shape)]):
+            # if this is the case then gt is probably already a one hot encoding
+            y_onehot = gt
+        else:
+            gt = gt.long()
+            y_onehot = torch.zeros(shp_x)
+            if net_output.device.type == "cuda":
+                y_onehot = y_onehot.cuda(net_output.device.index)
+            y_onehot.scatter_(1, gt, 1)
+    return y_onehot# this is a transform for gt
+
 def loss_bce_cla(Z, Y, reduction):
     Y=Y.to(Z.dtype)
     loss=nnF.binary_cross_entropy_with_logits(Z, Y, reduction='none')
@@ -34,6 +52,11 @@ def loss_ce_cla(Z, Y, reduction):
 
 def run_model_std_cla(model, X, Y=None, return_loss=False, reduction='none'):
     Z=model(X)
+    if type(Z)==tuple:
+        Z = Z[0]
+    Y = one_hot_output(Z, Y)        
+
+            
     if return_loss == True:
         if len(Z.shape) <= 1:
             loss_ce=loss_bce_cla(Z, Y, reduction)
@@ -90,6 +113,10 @@ def loss_mse_reg(Yp, Y, reduction):
 #
 def run_model_std_reg(model, X, Y=None, return_loss=False, reduction='sum'):
     Yp=model(X)
+    
+    if type(Yp)==tuple:
+        Yp = Yp[0]
+    Y = one_hot_output(Yp, Y)         
     if return_loss == True:
         loss=loss_mae_reg(Yp, Y, reduction)        
         return Yp, loss
@@ -98,6 +125,9 @@ def run_model_std_reg(model, X, Y=None, return_loss=False, reduction='sum'):
 #
 def run_model_adv_reg(model, X, Y=None, return_loss=False, reduction='sum'):
     Yp=model(X)
+    if type(Yp)==tuple:
+        Yp = Yp[0]
+    Y = one_hot_output(Yp, Y)  
     if return_loss == True:
         loss=loss_mae_reg(Yp, Y, reduction)        
         return Yp, loss
@@ -118,12 +148,18 @@ def classify_model_adv_output_reg(Ypn, Y):
     return Ypn_e_Y
 #%% segmentation
 def dice_seg(Yp, Y, reduction):
+    #-----
+    if type(Yp)==tuple:
+        Yp = Yp[0]    
+    Y = one_hot_output(Yp, Y)      
+    #-----
     if len(Yp.shape)==4:
         #2D segmentation, shape: NxKxHxW
         temp=(2,3)
     elif len(Yp.shape)==5:
         #3D segmentation, shape: NxKxHxWxD
         temp=(2,3,4)
+    
     intersection = (Yp*Y).sum(dim=temp)
     smooth=1
     dice = (2*intersection+smooth) / (Yp.sum(dim=temp) + Y.sum(dim=temp)+smooth)
@@ -174,6 +210,11 @@ def loss_ce_seg(Z, Y, reduction):
 #
 def run_model_std_seg(model, X, Y=None, return_loss=False, reduction='none'):
     Z=model(X)
+    #-----
+    if type(Z)==tuple:
+        Z = Z[0]    
+    Y = one_hot_output(Z, Y)      
+    #-----
     if return_loss == True:
         if Z.shape[1] == 1:
             loss_ce=loss_bce_seg(Z, Y, reduction)
@@ -193,6 +234,11 @@ def run_model_std_seg(model, X, Y=None, return_loss=False, reduction='none'):
 #
 def run_model_adv_seg(model, X, Y=None, return_loss=False, reduction='sum'):
     Z=model(X)
+    #-----
+    if type(Z)==tuple:
+        Z = Z[0]    
+    Y = one_hot_output(Z, Y)      
+    #-----
     Yp=torch.sigmoid(Z)#segmentation map
     if return_loss == True:
         loss_dice=loss_dice_seg(Yp, Y, reduction=reduction)
@@ -407,6 +453,7 @@ def IMA_loss(model, X, Y, margin, norm_type, max_iter, step,
             step=step.view(-1, *temp)
     #-----------------------------------
     Yp, loss_X=run_model_std(model, X, Y, return_loss=True, reduction='none')
+
     Yp_e_Y=classify_model_std_output(Yp, Y)
     Yp_ne_Y=~Yp_e_Y    
     #-----------------------------------

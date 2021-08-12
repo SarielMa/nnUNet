@@ -285,7 +285,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         elif reduction =='sum':
             mrse=mrse.sum()
         return mrse
-    
+    """
     def classify_model_std_output_reg(self,Yp, Y):
         mrse=self.mrse_shape(Yp, Y, reduction='none')
         Yp_e_Y=(mrse<=10)
@@ -296,7 +296,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         mrse=self.mrse_shape(Ypn, Y, reduction='none')
         Ypn_e_Y=(mrse<=5)
         return Ypn_e_Y
-
+    """
     def classify_model_std_output_seg(self,Yp, Y):
         dice=dice_seg(Yp, Y, reduction='none')
         Yp_e_Y=(dice>0.5)
@@ -328,6 +328,16 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ###################################################
         flag1=torch.zeros(len(args.E), dtype=torch.float32)
         flag2=torch.zeros(len(args.E), dtype=torch.float32)
+        stop=args.stop
+        stop_near_boundary=False
+        stop_if_label_change=False
+        stop_if_label_change_next_step=False
+        if stop==1:
+            stop_near_boundary=True
+        elif stop==2:
+            stop_if_label_change=True
+        elif stop==3:
+            stop_if_label_change_next_step=True
         #E_new=args.E.detach().clone()
         ###################################################
         
@@ -354,15 +364,15 @@ class nnUNetTrainerV2(nnUNetTrainer):
                                                                        refine_Xn_max_iter=args.refine_Xn_max_iter,
                                                                        Xn1_equal_X=args.Xn1_equal_X,
                                                                        Xn2_equal_Xn=args.Xn2_equal_Xn,
-                                                                       stop_near_boundary=True,
-                                                                       stop_if_label_change=args.stop_if_label_change,
-                                                                       stop_if_label_change_next_step=args.stop_if_label_change_next_step,
+                                                                       stop_near_boundary=stop_near_boundary,
+                                                                       stop_if_label_change=stop_if_label_change,
+                                                                       stop_if_label_change_next_step=stop_if_label_change_next_step,
                                                                        beta=args.beta, beta_position=args.beta_position,
                                                                        use_optimizer=False,
                                                                        run_model_std=run_model_std_reg,
-                                                                       classify_model_std_output=args.classify_model_std_output_reg,
+                                                                       classify_model_std_output=self.classify_model_std_output_seg,
                                                                        run_model_adv=run_model_adv_reg,
-                                                                       classify_model_adv_output=args.classify_model_adv_output_reg,
+                                                                       classify_model_adv_output=self.classify_model_adv_output_seg,
                                                                        pgd_replace_Y_with_Yp=args.pgd_replace_Y_with_Yp,
                                                                        model_eval_attack=args.model_eval_attack,
                                                                        model_eval_Xn=args.model_eval_Xn,
