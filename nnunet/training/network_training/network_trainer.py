@@ -504,7 +504,117 @@ class NetworkTrainer(object):
         if isfile(join(self.output_folder, "model_latest.model.pkl")):
             os.remove(join(self.output_folder, "model_latest.model.pkl"))
             
+    class IMA_params:
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 0.1
+            self.norm_type = np.inf
+            self.alpha = 4
+            self.max_iter = 20
+            self.stop = 1
+            self.refine_Xn_max_iter = 10
+            self.beta = 0.5
+            self.beta_position =1
+            self.E = 0
+            self.epoch_refine = 100
+            self.delta = self.noise/self.epoch_refine
+            self.model_eval_attack=0
+            self.model_eval_Xn=0
+            self.model_Xn_advc_p=0
+            self.Xn1_equal_X =0
+            self.Xn2_equal_Xn =0
+            self.pgd_replace_Y_with_Yp=0
+        
+    def run_IMA_training(self, counter):
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
 
+        _ = self.tr_gen.next()
+        _ = self.val_gen.next()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+        maybe_mkdir_p(self.output_folder)        
+        self.plot_network_architecture()
+
+        # config IMA parameters
+        #######################################################################################
+        args = self.IMA_params()
+        args.E=args.delta*torch.ones(counter, dtype=torch.float32)
+        #E_new=args.E.detach().clone()
+        #######################################################################################
+
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        while self.epoch < self.max_num_epochs:
+            self.print_to_log_file("\nepoch: ", self.epoch)
+            epoch_start_time = time()
+            train_losses_epoch = []
+
+            # train one epoch
+            self.network.train()
+
+
+            for _ in range(self.num_batches_per_epoch):
+                l = self.run_IMA_iteration(self.tr_gen, args, True)
+                train_losses_epoch.append(l)
+
+            self.all_tr_losses.append(np.mean(train_losses_epoch))
+            self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
+            #------
+            
+            
+            #------
+            with torch.no_grad():
+                # validation with train=False
+                self.network.eval()
+                val_losses = []
+                for b in range(self.num_val_batches_per_epoch):
+                    l = self.run_iteration(self.val_gen, False, True)
+                    val_losses.append(l)
+                self.all_val_losses.append(np.mean(val_losses))
+                self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
+
+                if self.also_val_in_tr_mode:
+                    self.network.train()
+                    # validation with train=True
+                    val_losses = []
+                    for b in range(self.num_val_batches_per_epoch):
+                        l = self.run_iteration(self.val_gen, False)
+                        val_losses.append(l)
+                    self.all_val_losses_tr_mode.append(np.mean(val_losses))
+                    self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
+
+            self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
+
+            continue_training = self.on_epoch_end()
+
+            epoch_end_time = time()
+
+            if not continue_training:
+                # allows for early stopping
+                break
+
+            self.epoch += 1
+            self.print_to_log_file("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
+
+        self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
+
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_IMA_final_checkpoint.model"))
+        # now we can delete latest as it will be identical with final
+        if isfile(join(self.output_folder, "model_IMA_latest.model")):
+            os.remove(join(self.output_folder, "model_IMA_latest.model"))
+        if isfile(join(self.output_folder, "model_IMA_latest.model.pkl")):
+            os.remove(join(self.output_folder, "model_IMA_latest.model.pkl"))
 
     def maybe_update_lr(self):
         # maybe update learning rate
@@ -634,6 +744,47 @@ class NetworkTrainer(object):
 
 
     def run_iteration(self, data_generator, do_backprop=True, run_online_evaluation=False):
+        data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']
+
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)
+
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+
+        self.optimizer.zero_grad()
+
+        if self.fp16:
+            with autocast():
+                output = self.network(data)
+                del data
+                l = self.loss(output, target)
+
+            if do_backprop:
+                self.amp_grad_scaler.scale(l).backward()
+                self.amp_grad_scaler.step(self.optimizer)
+                self.amp_grad_scaler.update()
+        else:
+            output = self.network(data)
+            del data
+            l = self.loss(output, target)
+
+            if do_backprop:
+                l.backward()
+                self.optimizer.step()
+
+        if run_online_evaluation:
+            self.run_online_evaluation(output, target)
+
+        del target
+
+        return l.detach().cpu().numpy()
+    
+    
+    def run_IMA_iteration(self, data_generator, do_backprop=True, run_online_evaluation=False):
         data_dict = next(data_generator)
         data = data_dict['data']
         target = data_dict['target']
@@ -888,6 +1039,11 @@ class NetworkTrainer(object):
     def dice_loss(self,Zn, Y):
         return 1-self. dice(Zn, Y, 'mean')
     """
+    def maskIt(self, x):
+        ma = x.max()
+        mi = x.min()
+        x = (x-mi)/(ma-mi)
+        return x
     def run_one_adv(self, data_dict):
         self.network.eval()
         #data_dict = next(data_generator)
@@ -906,8 +1062,11 @@ class NetworkTrainer(object):
         valDice = DiceIndex()
         with torch.no_grad():
             output = self.network(Xn)
-            
-            l = valDice(output[0], target[0])        
+            #Yp = self.maskIt(output[0])
+            #Y = self.maskIt(target[0])
+            Yp = output[0]
+            Y = target[0]
+            l = valDice(Yp,Y)        
         #l.backward()
         """
         if run_online_evaluation:
@@ -957,7 +1116,7 @@ class NetworkTrainer(object):
                 break
             
         self.all_val_losses.append(np.mean(val_losses))
-        self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
+        self.print_to_log_file("validation dice: %.4f" % self.all_val_losses[-1])
         epoch_end_time = time()
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
 

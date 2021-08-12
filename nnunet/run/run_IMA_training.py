@@ -108,7 +108,7 @@ def main():
     network_trainer = args.network_trainer
     """
     task = "005"
-    fold = "0"
+    fold = "1"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"
     validation_only = args.validation_only
@@ -191,7 +191,7 @@ def main():
                 # new training without pretraine weights, do nothing
                 pass
 
-            trainer.run_training()
+            trainer.run_IMA_training()
         else:
             if valbest:
                 trainer.load_best_checkpoint(train=False)
@@ -211,6 +211,4 @@ def main():
 
 
 if __name__ == "__main__":
-    from multiprocessing import freeze_support
-    freeze_support()
     main()

@@ -319,6 +319,10 @@ class nnUNetTrainer(NetworkTrainer):
     def run_training(self):
         self.save_debug_information()
         super(nnUNetTrainer, self).run_training()
+
+    def run_IMA_training(self, counter):
+        self.save_debug_information()
+        super(nnUNetTrainer, self).run_IMA_training(counter)
         
     def run_validate_adv(self):
         self.save_debug_information()

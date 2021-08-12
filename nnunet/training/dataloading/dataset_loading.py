@@ -425,6 +425,24 @@ class DataLoader2D(SlimDataLoaderBase):
             self.need_to_pad += pad_sides
         self.pad_sides = pad_sides
         self.data_shape, self.seg_shape = self.determine_shapes()
+        self.idx = dict()# map each 2d slice to a unique id
+        self.counter = 0
+        self.initialize_id()
+        
+    def initialize_id(self):
+        # assign each 2d sample a id base on their file and slice 
+        
+        for k in self.list_of_keys:
+            if isfile(self._data[k]['data_file'][:-4] + ".npy"):
+                temp = np.load(self._data[k]['data_file'][:-4] + ".npy", self.memmap_mode)
+            else:
+                temp = np.load(self._data[k]['data_file'])['data']        
+            for i in range(temp.shape[1]):
+                self.idx[tuple([k,i])] = self.counter
+                self.counter +=1
+        
+    def get_id(self, r_slice, key):
+        return self.idx[tuple([key, r_slice])]
 
     def determine_shapes(self):
         num_seg = 1
@@ -447,9 +465,11 @@ class DataLoader2D(SlimDataLoaderBase):
 
         data = np.zeros(self.data_shape, dtype=np.float32)
         seg = np.zeros(self.seg_shape, dtype=np.float32)
+        ids = []
 
         case_properties = []
         for j, i in enumerate(selected_keys):
+            # i is the list of the names of datasets
             if 'properties' in self._data[i].keys():
                 properties = self._data[i]['properties']
             else:
@@ -495,9 +515,12 @@ class DataLoader2D(SlimDataLoaderBase):
                     random_slice = np.random.choice(valid_slices)
                     voxels_of_that_class = voxels_of_that_class[voxels_of_that_class[:, 0] == random_slice]
                     voxels_of_that_class = voxels_of_that_class[:, 1:]
-
+                    
+            # get the id for this slice
+            slice_id = self.get_id(random_slice, i)
             # now crop case_all_data to contain just the slice of interest. If we want additional slice above and
             # below the current slice, here is where we get them. We stack those as additional color channels
+            
             if self.pseudo_3d_slices == 1:
                 case_all_data = case_all_data[:, random_slice]
             else:
@@ -588,9 +611,10 @@ class DataLoader2D(SlimDataLoaderBase):
 
             data[j] = case_all_data_donly
             seg[j] = case_all_data_segonly
+            ids.append(slice_id)
 
         keys = selected_keys
-        return {'data': data, 'seg': seg, 'properties': case_properties, "keys": keys}
+        return {'data': data, 'seg': seg, 'properties': case_properties, "keys": keys, "id": ids}
 
 
 if __name__ == "__main__":

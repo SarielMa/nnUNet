@@ -34,6 +34,9 @@ from torch import nn
 from torch.cuda.amp import autocast
 from nnunet.training.learning_rate.poly_lr import poly_lr
 from batchgenerators.utilities.file_and_folder_operations import *
+from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_loss, IMA_check_margin, IMA_update_margin, plot_margin_hist
+from nnunet.IMA.RobustDNN_IMA_claregseg import run_model_std_reg, run_model_adv_reg, loss_dice_seg, loss_mae_reg
+from nnunet.IMA.RobustDNN_IMA_claregseg import run_model_std_seg, run_model_adv_seg, dice_seg
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -273,6 +276,126 @@ class nnUNetTrainerV2(nnUNetTrainer):
 
         return l.detach().cpu().numpy()
 
+    def mrse_shape(self,Sp, S, reduction):
+        S=S.view(S.shape[0], -1, 2)
+        Sp=Sp.view(Sp.shape[0], -1, 2)
+        mrse = ((Sp-S)**2).sum(dim=2).sqrt().mean(dim=1)
+        if reduction =='mean':
+            mrse=mrse.mean()
+        elif reduction =='sum':
+            mrse=mrse.sum()
+        return mrse
+    
+    def classify_model_std_output_reg(self,Yp, Y):
+        mrse=self.mrse_shape(Yp, Y, reduction='none')
+        Yp_e_Y=(mrse<=10)
+        return Yp_e_Y
+    
+    def classify_model_adv_output_reg(self,Ypn, Y):
+        #Y could be Ytrue or Ypred
+        mrse=self.mrse_shape(Ypn, Y, reduction='none')
+        Ypn_e_Y=(mrse<=5)
+        return Ypn_e_Y
+
+    def classify_model_std_output_seg(self,Yp, Y):
+        dice=dice_seg(Yp, Y, reduction='none')
+        Yp_e_Y=(dice>0.5)
+        return Yp_e_Y
+    #
+    def classify_model_adv_output_seg(self,Ypn, Y):
+        #Y could be Ytrue or Ypred
+        dice=dice_seg(Ypn, Y, reduction='none')
+        Ypn_e_Y=(dice>0.85)
+        return Ypn_e_Y
+    
+    def run_IMA_iteration(self, data_generator, args, do_backprop=True, run_online_evaluation=False):
+        """
+        gradient clipping improves training stability
+
+        :param data_generator:
+        :param do_backprop:
+        :param run_online_evaluation:
+        :return:
+        """
+        data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']
+        idx = data_dict['id']
+
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)
+        # parameters that need to be set for IMA
+        ###################################################
+        flag1=torch.zeros(len(args.E), dtype=torch.float32)
+        flag2=torch.zeros(len(args.E), dtype=torch.float32)
+        #E_new=args.E.detach().clone()
+        ###################################################
+        
+        rand_init_norm=torch.clamp(args.E[idx]-args.delta, min=args.delta)
+        margin = to_cuda(args.E)
+        step=args.alpha*margin/args.max_iter
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+            rand_init_norm = to_cuda(rand_init_norm)
+
+        self.optimizer.zero_grad()
+        #output = self.network(data)
+        #del data
+        #l = self.loss(output, target)
+        # loss should compare output[0] and target[0]
+        loss, loss1, loss2, loss3, Yp, advc, Xn, Ypn, idx_n = IMA_loss(self.network, data, Y=target[0],#?Y should be S?
+                                                                       norm_type=args.norm_type,
+                                                                       rand_init_norm=rand_init_norm,
+                                                                       margin=margin,
+                                                                       max_iter=args.max_iter,
+                                                                       step=step,
+                                                                       refine_Xn_max_iter=args.refine_Xn_max_iter,
+                                                                       Xn1_equal_X=args.Xn1_equal_X,
+                                                                       Xn2_equal_Xn=args.Xn2_equal_Xn,
+                                                                       stop_near_boundary=True,
+                                                                       stop_if_label_change=args.stop_if_label_change,
+                                                                       stop_if_label_change_next_step=args.stop_if_label_change_next_step,
+                                                                       beta=args.beta, beta_position=args.beta_position,
+                                                                       use_optimizer=False,
+                                                                       run_model_std=run_model_std_reg,
+                                                                       classify_model_std_output=args.classify_model_std_output_reg,
+                                                                       run_model_adv=run_model_adv_reg,
+                                                                       classify_model_adv_output=args.classify_model_adv_output_reg,
+                                                                       pgd_replace_Y_with_Yp=args.pgd_replace_Y_with_Yp,
+                                                                       model_eval_attack=args.model_eval_attack,
+                                                                       model_eval_Xn=args.model_eval_Xn,
+                                                                       model_Xn_advc_p=args.model_Xn_advc_p)        
+
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+        #--------------------
+        Mp, loss_seg = run_model_std_seg(self.network, data, Y=target[0], return_loss=True, reduction='mean')
+        ((1-args.beta)*loss_seg).backward()
+        if idx_n.shape[0]>0:
+            Mp, loss_seg = run_model_std_seg(self.network, Xn, Y=target[0][idx_n], return_loss=True, reduction='sum')
+            loss_seg=loss_seg/data.shape[0]
+            (args.beta*loss_seg).backward()        
+        #--------------------
+        self.optimizer.step()
+        #--------------------update the margins
+        Yp_e_Y=self.classify_model_std_output_seg(Yp, target[0])
+        flag1[idx[advc==0]]=1
+        flag2[idx[Yp_e_Y]]=1
+        
+        if idx_n.shape[0]>0:
+            temp=torch.norm((Xn-data[idx_n]).view(Xn.shape[0], -1), p=args.norm_type, dim=1).cpu()
+            args.E[idx[idx_n]]=torch.min(args.E[idx[idx_n]], temp)
+        #--------------------
+
+        if run_online_evaluation:
+            self.run_online_evaluation(Mp, target[0])
+
+        del target
+
+        return loss.detach().cpu().numpy()
+
     def do_split(self):
         """
         The default split is a 5 fold CV on all available training cases. nnU-Net will create a split (it is seeded,
@@ -457,5 +580,20 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ds = self.network.do_ds
         self.network.do_ds = True
         ret = super().run_validate_adv()
+        self.network.do_ds = ds
+        return ret
+    def run_IMA_training(self):
+        """
+        if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
+        continued epoch with self.initial_lr
+
+        we also need to make sure deep supervision in the network is enabled for training, thus the wrapper
+        :return:
+        """
+        self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we
+        # want at the start of the training
+        ds = self.network.do_ds
+        self.network.do_ds = True
+        ret = super().run_IMA_training(self.dl_tr.counter)#pass the number of samples in training set
         self.network.do_ds = ds
         return ret
