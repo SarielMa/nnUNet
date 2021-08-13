@@ -368,9 +368,9 @@ class nnUNetTrainerV2(nnUNetTrainer):
                                                                        stop_if_label_change_next_step=stop_if_label_change_next_step,
                                                                        beta=args.beta, beta_position=args.beta_position,
                                                                        use_optimizer=False,
-                                                                       run_model_std=run_model_std_reg,
+                                                                       run_model_std=run_model_std_seg,
                                                                        classify_model_std_output=self.classify_model_std_output_seg,
-                                                                       run_model_adv=run_model_adv_reg,
+                                                                       run_model_adv=run_model_adv_seg,
                                                                        classify_model_adv_output=self.classify_model_adv_output_seg,
                                                                        pgd_replace_Y_with_Yp=args.pgd_replace_Y_with_Yp,
                                                                        model_eval_attack=args.model_eval_attack,
@@ -399,7 +399,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         #--------------------
 
         if run_online_evaluation:
-            self.run_online_evaluation(Mp, target[0])
+            self.run_online_evaluation([Mp], target)
 
         del target
 

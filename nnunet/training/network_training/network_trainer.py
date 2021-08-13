@@ -100,8 +100,8 @@ class NetworkTrainer(object):
         self.train_loss_MA_alpha = 0.93  # alpha * old + (1-alpha) * new
         self.train_loss_MA_eps = 5e-4  # new MA must be at least this much better (smaller)
         self.max_num_epochs = 1000
-        self.num_batches_per_epoch = 250
-        self.num_val_batches_per_epoch = 50
+        self.num_batches_per_epoch = 50
+        self.num_val_batches_per_epoch = 30
         self.also_val_in_tr_mode = False
         self.lr_threshold = 1e-6  # the network will not terminate training if the lr is still above this threshold
 
@@ -531,7 +531,7 @@ class NetworkTrainer(object):
         ax.hist(E.cpu().numpy(), bins=100, range=(0, noise))
         #display.display(fig)
         if filename is not None:
-            fig.savefig(filename+'_histE.png')
+            fig.savefig(filename+'.png')
         plt.close(fig)     
         
     def run_IMA_training(self, counter):
@@ -575,8 +575,9 @@ class NetworkTrainer(object):
             #---------------------------
             # train one epoch
             self.network.train()
-            for _ in range(self.num_batches_per_epoch):
+            for c in range(self.num_batches_per_epoch):
                 l, flag1, flag2, E_new = self.run_IMA_iteration(self.tr_gen, args,flag1, flag2, E_new, True)
+                #print("batch ",c,"finished")
                 train_losses_epoch.append(l)
             # one epoch finished
             self.all_tr_losses.append(np.mean(train_losses_epoch))
@@ -584,7 +585,7 @@ class NetworkTrainer(object):
             #------update the margin
             IMA_update_margin(args, args.delta, args.noise, flag1, flag2, E_new)
             print('IMA_update_margin: done, margin updated')    
-            self.plot_E(args.E, args.noise,'histE.png')           
+            self.plot_E(args.E, args.noise,'histE')           
             
             #------
             with torch.no_grad():
@@ -799,45 +800,7 @@ class NetworkTrainer(object):
         return l.detach().cpu().numpy()
     
     
-    def run_IMA_iteration(self, data_generator, do_backprop=True, run_online_evaluation=False):
-        data_dict = next(data_generator)
-        data = data_dict['data']
-        target = data_dict['target']
 
-        data = maybe_to_torch(data)
-        target = maybe_to_torch(target)
-
-        if torch.cuda.is_available():
-            data = to_cuda(data)
-            target = to_cuda(target)
-
-        self.optimizer.zero_grad()
-
-        if self.fp16:
-            with autocast():
-                output = self.network(data)
-                del data
-                l = self.loss(output, target)
-
-            if do_backprop:
-                self.amp_grad_scaler.scale(l).backward()
-                self.amp_grad_scaler.step(self.optimizer)
-                self.amp_grad_scaler.update()
-        else:
-            output = self.network(data)
-            del data
-            l = self.loss(output, target)
-
-            if do_backprop:
-                l.backward()
-                self.optimizer.step()
-
-        if run_online_evaluation:
-            self.run_online_evaluation(output, target)
-
-        del target
-
-        return l.detach().cpu().numpy()
 
     def run_online_evaluation(self, *args, **kwargs):
         """
