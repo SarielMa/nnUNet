@@ -54,10 +54,9 @@ def run_model_std_cla(model, X, Y=None, return_loss=False, reduction='none'):
     Z=model(X)
     if type(Z)==tuple:
         Z = Z[0]
-    Y = one_hot_output(Z, Y)        
-
-            
+                       
     if return_loss == True:
+        Y = one_hot_output(Z, Y)
         if len(Z.shape) <= 1:
             loss_ce=loss_bce_cla(Z, Y, reduction)
             Yp = (Z.data>0).to(torch.int64)
@@ -116,8 +115,9 @@ def run_model_std_reg(model, X, Y=None, return_loss=False, reduction='sum'):
     
     if type(Yp)==tuple:
         Yp = Yp[0]
-    Y = one_hot_output(Yp, Y)         
+             
     if return_loss == True:
+        Y = one_hot_output(Yp, Y)
         loss=loss_mae_reg(Yp, Y, reduction)        
         return Yp, loss
     else:
@@ -127,8 +127,9 @@ def run_model_adv_reg(model, X, Y=None, return_loss=False, reduction='sum'):
     Yp=model(X)
     if type(Yp)==tuple:
         Yp = Yp[0]
-    Y = one_hot_output(Yp, Y)  
+      
     if return_loss == True:
+        Y = one_hot_output(Yp, Y)
         loss=loss_mae_reg(Yp, Y, reduction)        
         return Yp, loss
     else:
@@ -213,7 +214,7 @@ def run_model_std_seg(model, X, Y=None, return_loss=False, reduction='none'):
     #-----
     if type(Z)==tuple:
         Z = Z[0]    
-    Y = one_hot_output(Z, Y)      
+    #Y = one_hot_output(Z, Y)      
     #-----
     if return_loss == True:
         if Z.shape[1] == 1:
@@ -237,7 +238,7 @@ def run_model_adv_seg(model, X, Y=None, return_loss=False, reduction='sum'):
     #-----
     if type(Z)==tuple:
         Z = Z[0]    
-    Y = one_hot_output(Z, Y)      
+    #Y = one_hot_output(Z, Y)      
     #-----
     Yp=torch.sigmoid(Z)#segmentation map
     if return_loss == True:
@@ -668,7 +669,7 @@ def IMA_check_margin(model, device, dataloader,
     #-------------------------------
     return flag1, flag2, margin_new
 #%%
-def IMA_update_margin(margin, delta, max_margin, flag1, flag2, margin_new):
+def IMA_update_margin_OLD(margin, delta, max_margin, flag1, flag2, margin_new):
     # margin: to be updated
     # delta: margin expansion step size
     # max_margin: maximum margin
@@ -680,6 +681,19 @@ def IMA_update_margin(margin, delta, max_margin, flag1, flag2, margin_new):
     #
     margin[flag2==0]=delta
     margin.clamp_(min=delta, max=max_margin)
+    
+def IMA_update_margin(args, delta, max_margin, flag1, flag2, margin_new):
+    # margin: to be updated
+    # delta: margin expansion step size
+    # max_margin: maximum margin
+    # flag1, flag2, margin_new: from IMA_check_margin
+    expand=(flag1==1)&(flag2==1)
+    no_expand=(flag1==0)&(flag2==1)
+    args.E[expand]+=delta
+    args.E[no_expand]=margin_new[no_expand]
+    #
+    args.E[flag2==0]=delta
+    args.E.clamp_(min=delta, max=max_margin)
 #%%
 def IMA_estimate_margin(model, device, dataloader,
                         margin_level, norm_type, max_iter, step,

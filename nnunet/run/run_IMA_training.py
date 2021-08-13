@@ -108,7 +108,7 @@ def main():
     network_trainer = args.network_trainer
     """
     task = "005"
-    fold = "1"
+    fold = "0"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"
     validation_only = args.validation_only

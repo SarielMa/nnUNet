@@ -308,7 +308,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Ypn_e_Y=(dice>0.85)
         return Ypn_e_Y
     
-    def run_IMA_iteration(self, data_generator, args, do_backprop=True, run_online_evaluation=False):
+    def run_IMA_iteration(self, data_generator, args,flag1, flag2, E_new, do_backprop=True, run_online_evaluation=False):
         """
         gradient clipping improves training stability
 
@@ -320,14 +320,13 @@ class nnUNetTrainerV2(nnUNetTrainer):
         data_dict = next(data_generator)
         data = data_dict['data']
         target = data_dict['target']
-        idx = data_dict['id']
+        idx = torch.tensor(data_dict['id'])
 
         data = maybe_to_torch(data)
         target = maybe_to_torch(target)
         # parameters that need to be set for IMA
         ###################################################
-        flag1=torch.zeros(len(args.E), dtype=torch.float32)
-        flag2=torch.zeros(len(args.E), dtype=torch.float32)
+
         stop=args.stop
         stop_near_boundary=False
         stop_if_label_change=False
@@ -342,7 +341,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ###################################################
         
         rand_init_norm=torch.clamp(args.E[idx]-args.delta, min=args.delta)
-        margin = to_cuda(args.E)
+        margin = to_cuda(args.E[idx])
         step=args.alpha*margin/args.max_iter
         
         if torch.cuda.is_available():
@@ -396,7 +395,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         
         if idx_n.shape[0]>0:
             temp=torch.norm((Xn-data[idx_n]).view(Xn.shape[0], -1), p=args.norm_type, dim=1).cpu()
-            args.E[idx[idx_n]]=torch.min(args.E[idx[idx_n]], temp)
+            E_new[idx[idx_n]]=torch.min(E_new[idx[idx_n]], temp)
         #--------------------
 
         if run_online_evaluation:
@@ -404,7 +403,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
 
         del target
 
-        return loss.detach().cpu().numpy()
+        return loss.detach().cpu().numpy(), flag1, flag2, E_new
 
     def do_split(self):
         """

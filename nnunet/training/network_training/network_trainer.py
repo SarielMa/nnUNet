@@ -38,7 +38,8 @@ from datetime import datetime
 from tqdm import trange
 from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
 from nnunet.training.loss_functions.dice_loss import DiceIndex
-
+from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_update_margin
+import os.path
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -524,6 +525,14 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0
+            
+    def plot_E(self, E, noise, filename=None):
+        fig, ax = plt.subplots()
+        ax.hist(E.cpu().numpy(), bins=100, range=(0, noise))
+        #display.display(fig)
+        if filename is not None:
+            fig.savefig(filename+'_histE.png')
+        plt.close(fig)     
         
     def run_IMA_training(self, counter):
         if not torch.cuda.is_available():
@@ -559,28 +568,34 @@ class NetworkTrainer(object):
             self.print_to_log_file("\nepoch: ", self.epoch)
             epoch_start_time = time()
             train_losses_epoch = []
-
+            #----------------------------
+            flag1=torch.zeros(len(args.E), dtype=torch.float32)
+            flag2=torch.zeros(len(args.E), dtype=torch.float32)
+            E_new=args.E.detach().clone()
+            #---------------------------
             # train one epoch
             self.network.train()
-
-
             for _ in range(self.num_batches_per_epoch):
-                l = self.run_IMA_iteration(self.tr_gen, args, True)
+                l, flag1, flag2, E_new = self.run_IMA_iteration(self.tr_gen, args,flag1, flag2, E_new, True)
                 train_losses_epoch.append(l)
-
+            # one epoch finished
             self.all_tr_losses.append(np.mean(train_losses_epoch))
             self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
-            #------
-            
+            #------update the margin
+            IMA_update_margin(args, args.delta, args.noise, flag1, flag2, E_new)
+            print('IMA_update_margin: done, margin updated')    
+            self.plot_E(args.E, args.noise,'histE.png')           
             
             #------
             with torch.no_grad():
                 # validation with train=False
                 self.network.eval()
                 val_losses = []
+                # run one epoch.....
                 for b in range(self.num_val_batches_per_epoch):
                     l = self.run_iteration(self.val_gen, False, True)
                     val_losses.append(l)
+   
                 self.all_val_losses.append(np.mean(val_losses))
                 self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
 
