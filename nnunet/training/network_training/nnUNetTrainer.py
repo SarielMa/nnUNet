@@ -324,9 +324,9 @@ class nnUNetTrainer(NetworkTrainer):
         self.save_debug_information()
         super(nnUNetTrainer, self).run_IMA_training(counter)
         
-    def run_validate_adv(self):
+    def run_validate_adv(self, noise):
         self.save_debug_information()
-        super(nnUNetTrainer, self).run_validate_adv()
+        super(nnUNetTrainer, self).run_validate_adv(noise)
         
     def load_plans_file(self):
         """
@@ -695,6 +695,7 @@ class nnUNetTrainer(NetworkTrainer):
         self.network.train(current_mode)
 
     def run_online_evaluation(self, output, target):
+        # within each batch
         with torch.no_grad():
             num_classes = output.shape[1]
             output_softmax = softmax_helper(output)
@@ -736,6 +737,27 @@ class nnUNetTrainer(NetworkTrainer):
         self.online_eval_tp = []
         self.online_eval_fp = []
         self.online_eval_fn = []
+
+    def my_finish_online_evaluation(self):
+        #after each epoch
+        self.online_eval_tp = np.sum(self.online_eval_tp, 0)
+        self.online_eval_fp = np.sum(self.online_eval_fp, 0)
+        self.online_eval_fn = np.sum(self.online_eval_fn, 0)
+
+        global_dc_per_class = [i for i in [2 * i / (2 * i + j + k) for i, j, k in
+                                           zip(self.online_eval_tp, self.online_eval_fp, self.online_eval_fn)]
+                               if not np.isnan(i)]
+        self.all_val_eval_metrics.append(np.mean(global_dc_per_class))
+
+        #self.print_to_log_file("Average global foreground Dice:", str(global_dc_per_class))
+        #self.print_to_log_file("(interpret this as an estimate for the Dice of the different classes. This is not ""exact.)")
+
+        self.online_eval_foreground_dc = []
+        self.online_eval_tp = []
+        self.online_eval_fp = []
+        self.online_eval_fn = []
+        return global_dc_per_class
+        
 
     def save_checkpoint(self, fname, save_optimizer=True):
         super(nnUNetTrainer, self).save_checkpoint(fname, save_optimizer)

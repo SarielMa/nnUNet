@@ -316,6 +316,11 @@ class NetworkTrainer(object):
         if not isfile(filename):
             raise RuntimeError("Final checkpoint not found. Expected: %s. Please finish the training first." % filename)
         return self.load_checkpoint(filename, train=train)
+    
+    def my_load_final_checkpoint(self, filename, train=False):
+        if not isfile(filename):
+            raise RuntimeError("Final checkpoint not found. Expected: %s. Please finish the training first." % filename)
+        return self.load_checkpoint(filename, train=train)
 
     def load_checkpoint(self, fname, train=True):
         self.print_to_log_file("loading checkpoint", fname, "train=", train)
@@ -1022,19 +1027,20 @@ class NetworkTrainer(object):
         mi = x.min()
         x = (x-mi)/(ma-mi)
         return x
-    def run_one_adv(self, data_dict):
+    def run_one_adv(self, data_dict, noise):
         self.network.eval()
         #data_dict = next(data_generator)
         data = data_dict['data']
         target = data_dict['target']# target is a mask, but should have two...
         data = maybe_to_torch(data)
         target = maybe_to_torch(target)# only the first target among the six is useful
-
+        
         if torch.cuda.is_available():
             data = to_cuda(data)
             target = to_cuda(target)
+        
         self.optimizer.zero_grad()
-        Xn = self. pgd_attack(self.network, data, target, 0.0, "L2", 20, 0.01/5, use_optimizer=False, loss_fn=self.loss)
+        Xn = self. pgd_attack(self.network, data, target, noise, "Linf", 20, 0.01/5, use_optimizer=False, loss_fn=self.loss)
         
         ret = 0
         valDice = DiceIndex()
@@ -1042,9 +1048,14 @@ class NetworkTrainer(object):
             output = self.network(Xn)
             #Yp = self.maskIt(output[0])
             #Y = self.maskIt(target[0])
-            Yp = output[0]
-            Y = target[0]
-            l = valDice(Yp,Y)        
+            #Yp = output[0]
+            #Y = target[0]
+            #l = valDice(Yp,Y) 
+            self.run_online_evaluation(output, target)
+            #l = self.my_finish_online_evaluation()  # does not have to do anything, but can be used to update self.all_val_eval_
+            # metrics
+            #self.my_plot_progress()           
+            
         #l.backward()
         """
         if run_online_evaluation:
@@ -1052,9 +1063,9 @@ class NetworkTrainer(object):
         """
         del target
         
-        return l.detach().cpu().numpy() #this is the result, not the one for backpropagation
+        #return l.detach().cpu().numpy() #this is the result, not the one for backpropagation
 #%% adversarial part   
-    def run_validate_adv(self):
+    def run_validate_adv(self, noise):
         if not torch.cuda.is_available():
             self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
 
@@ -1078,25 +1089,29 @@ class NetworkTrainer(object):
         if not self.was_initialized:
             self.initialize(True)
 
-
+        counter = 1
         epoch_start_time = time()
         # validation with train=False
         self.network.eval()
-        val_losses = []
-        counter = 0
+        #val_losses = []
+        #counter = 0
         #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
         for data_dict in self.val_gen:
-            l = self.run_one_adv(data_dict)
-            print ("for this iteration, dice is ", str(l))
-            val_losses.append(l)
+            self.run_one_adv(data_dict, noise)
+            #print ("for this iteration, dice is ", str(l))
+            #val_losses.append(l)          
             counter +=1
             if counter >=2:
                 break
             
-        self.all_val_losses.append(np.mean(val_losses))
-        self.print_to_log_file("validation dice: %.4f" % self.all_val_losses[-1])
+        ret = self.my_finish_online_evaluation()
+        #self.all_val_losses.append(np.mean(val_losses))
+        validationDice = np.mean(ret)
+        self.print_to_log_file("av global foreground dice: ", ret)
+        self.print_to_log_file("validation dice: %.4f" % validationDice)
         epoch_end_time = time()
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
+        return validationDice
 
 
 

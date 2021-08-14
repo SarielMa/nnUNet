@@ -576,7 +576,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ret = super().run_training()
         self.network.do_ds = ds
         return ret
-    def run_validate_adv(self):
+    def run_validate_adv(self, noise):
         """
         if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
         continued epoch with self.initial_lr
@@ -588,7 +588,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         # want at the start of the training
         ds = self.network.do_ds
         self.network.do_ds = True
-        ret = super().run_validate_adv()
+        ret = super().run_validate_adv(noise)
         self.network.do_ds = ds
         return ret
     def run_IMA_training(self):

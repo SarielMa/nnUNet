@@ -29,11 +29,12 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetTrainerCascadeFullRes
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
+import matplotlib.pyplot as plt
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
 
-def main():
+def main(noise, filename):
     parser = argparse.ArgumentParser()
     """
     parser.add_argument("network")
@@ -179,12 +180,24 @@ def main():
     trainer.initialize(training = not validation_only)#only validate it
 
 
-    trainer.load_final_checkpoint(train=False)
-    trainer.run_validate_adv()
+    trainer.my_load_final_checkpoint(filename, train=False)
+    return trainer.run_validate_adv(noise)
+    
       
 
 
 
 
 if __name__ == "__main__":
-    main()
+    noises = [0.01,0.05]
+    nets = ["nnUnet", "IMA"]
+    basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/Task005_Prostate/nnUNetTrainerV2__nnUNetPlansv2.1"
+    folders = ["fold_0_old/model_final_checkpoint.model","fold_0/model_latest.model"]
+    for i, net in enumerate(nets):
+        yAxis = [main(noise, join(basePath, folders[i])) for noise in noises]
+        plt.plot(noises, yAxis, label=net)
+    plt.legend()
+    plt.xlabel("noise(Linf)")
+    plt.ylabel("Avg Dice Index")
+    plt.savefig("adv_result.png")
+        
