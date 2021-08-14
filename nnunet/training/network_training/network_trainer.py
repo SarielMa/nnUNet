@@ -100,7 +100,7 @@ class NetworkTrainer(object):
         self.train_loss_MA_alpha = 0.93  # alpha * old + (1-alpha) * new
         self.train_loss_MA_eps = 5e-4  # new MA must be at least this much better (smaller)
         self.max_num_epochs = 1000
-        self.num_batches_per_epoch = 50
+        self.num_batches_per_epoch = 250
         self.num_val_batches_per_epoch = 30
         self.also_val_in_tr_mode = False
         self.lr_threshold = 1e-6  # the network will not terminate training if the lr is still above this threshold
@@ -582,7 +582,7 @@ class NetworkTrainer(object):
             self.network.train()
             for c in range(self.num_batches_per_epoch):
                 l, flag1, flag2, E_new = self.run_IMA_iteration(self.tr_gen, args,flag1, flag2, E_new, True)
-                print("batch ",c,"finished")
+                #print("batch ",c,"finished")
                 train_losses_epoch.append(l)
             # one epoch finished
             self.all_tr_losses.append(np.mean(train_losses_epoch))
