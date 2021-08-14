@@ -209,7 +209,7 @@ def loss_ce_seg(Z, Y, reduction):
         raise ValueError('error')
     return loss
 #
-def run_model_std_seg(model, X, Y=None, return_loss=False, reduction='none'):
+def run_model_std_seg_old(model, X, Y=None, return_loss=False, reduction='none'):
     Z=model(X)
     #-----
     if type(Z)==tuple:
@@ -233,7 +233,7 @@ def run_model_std_seg(model, X, Y=None, return_loss=False, reduction='none'):
             Yp=torch.softmax(Z, dim=1)#segmentation map
         return Yp
 #
-def run_model_adv_seg(model, X, Y=None, return_loss=False, reduction='sum'):
+def run_model_adv_seg_old(model, X, Y=None, return_loss=False, reduction='sum'):
     Z=model(X)
     #-----
     if type(Z)==tuple:
@@ -246,7 +246,10 @@ def run_model_adv_seg(model, X, Y=None, return_loss=False, reduction='sum'):
         return Yp, loss_dice
     else:
         return Yp
-#
+    
+    
+
+"""
 def classify_model_std_output_seg(Yp, Y):
     threshold=0.9
     dice=dice_seg(Yp, Y, reduction='none')
@@ -259,6 +262,7 @@ def classify_model_adv_output_seg(Ypn, Y):
     dice=dice_seg(Ypn, Y, reduction='none')
     Ypn_e_Y=(dice>threshold)
     return Ypn_e_Y
+"""
 #%%
 def pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
                rand_init_norm=None, rand_init_Xn=None,
@@ -290,7 +294,7 @@ def pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
     #-----------------
     Xn1=X.detach().clone()
     Xn2=X.detach().clone()
-    Ypn_old_e_Y=torch.ones(Y.shape[0], dtype=torch.bool, device=Y.device)
+    Ypn_old_e_Y=torch.ones(Y[0].shape[0], dtype=torch.bool, device=Y[0].device)
     Ypn_old_ne_Y=~Ypn_old_e_Y
     #-----------------
     noise=(Xn-X).detach()
@@ -462,7 +466,7 @@ def IMA_loss(model, X, Y, margin, norm_type, max_iter, step,
     loss2=torch.tensor(0.0, dtype=X.dtype, device=X.device, requires_grad=True)
     loss3=torch.tensor(0.0, dtype=X.dtype, device=X.device, requires_grad=True)
     Xn=torch.tensor([], dtype=X.dtype, device=X.device)
-    Ypn=torch.tensor([], dtype=Y.dtype, device=X.device)
+    Ypn=torch.tensor([], dtype=Y[0].dtype, device=X.device)
     advc=torch.zeros(X.size(0), dtype=torch.int64, device=X.device)
     idx_n=torch.tensor([], dtype=torch.int64, device=X.device)
     #----------------------------------

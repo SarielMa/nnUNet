@@ -34,13 +34,14 @@ from torch import nn
 from torch.cuda.amp import autocast
 from nnunet.training.learning_rate.poly_lr import poly_lr
 from batchgenerators.utilities.file_and_folder_operations import *
-from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_loss, IMA_check_margin, IMA_update_margin, plot_margin_hist
-from nnunet.IMA.RobustDNN_IMA_claregseg import run_model_std_reg, run_model_adv_reg, loss_dice_seg, loss_mae_reg
-from nnunet.IMA.RobustDNN_IMA_claregseg import run_model_std_seg, run_model_adv_seg, dice_seg
+from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_loss
+
+from nnunet.training.loss_functions.dice_loss import DiceIndex
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
     
+
 class nnUNetTrainerV2(nnUNetTrainer):
     """
     Info for Fabian: same as internal nnUNetTrainerV2_2
@@ -50,7 +51,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
                  unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
                          deterministic, fp16)
-        self.max_num_epochs = 100
+        self.max_num_epochs = 2
         self.initial_lr = 1e-2
         self.deep_supervision_scales = None
         self.ds_loss_weights = None
@@ -297,18 +298,152 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Ypn_e_Y=(mrse<=5)
         return Ypn_e_Y
     """
-    def classify_model_std_output_seg(self,Yp, Y):
+    """
+    def classify_model_std_output_seg_old(self,Yp, Y):
         dice=dice_seg(Yp, Y, reduction='none')
+        Yp_e_Y=(dice>0.5)
+        return Yp_e_Y
+    #
+    def classify_model_adv_output_seg_old(self,Ypn, Y):
+        #Y could be Ytrue or Ypred
+        dice=dice_seg(Ypn, Y, reduction='none')
+        Ypn_e_Y=(dice>0.85)
+        return Ypn_e_Y
+    """
+    def classify_model_std_output_seg(self,Yp, Y):
+        valDice = DiceIndex()
+        Yp = Yp[0]
+        Y = Y[0]
+        dice=valDice(Yp, Y)
         Yp_e_Y=(dice>0.5)
         return Yp_e_Y
     #
     def classify_model_adv_output_seg(self,Ypn, Y):
         #Y could be Ytrue or Ypred
-        dice=dice_seg(Ypn, Y, reduction='none')
+        valDice = DiceIndex()
+        Yp = Yp[0]
+        Y = Y[0]
+        dice=valDice(Yp, Y)
         Ypn_e_Y=(dice>0.85)
         return Ypn_e_Y
     
+    def run_model_std_seg(self, model, X, Y=None, return_loss=False, reduction='none'):
+        Z=model(X)    
+        if return_loss == True:
+            loss=self.loss(Z, Y)
+            return Z, loss
+        else:
+            return Z
+    #
+    def run_model_adv_seg(self, model, X, Y=None, return_loss=False, reduction='sum'):
+        Z=model(X)
+        if return_loss == True:
+            loss_dice=self.loss(Z, Y)
+            return Z, loss_dice
+        else:
+            return Z
+    
+    
     def run_IMA_iteration(self, data_generator, args,flag1, flag2, E_new, do_backprop=True, run_online_evaluation=False):
+        """
+        gradient clipping improves training stability
+
+        :param data_generator:
+        :param do_backprop:
+        :param run_online_evaluation:
+        :return:
+        """
+        data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']
+        idx = torch.tensor(data_dict['id'])
+
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)
+        # parameters that need to be set for IMA
+        ###################################################
+
+        stop=args.stop
+        stop_near_boundary=False
+        stop_if_label_change=False
+        stop_if_label_change_next_step=False
+        if stop==1:
+            stop_near_boundary=True
+        elif stop==2:
+            stop_if_label_change=True
+        elif stop==3:
+            stop_if_label_change_next_step=True
+        #E_new=args.E.detach().clone()
+        ###################################################
+        
+        rand_init_norm=torch.clamp(args.E[idx]-args.delta, min=args.delta)
+        margin = to_cuda(args.E[idx])
+        step=args.alpha*margin/args.max_iter
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+            rand_init_norm = to_cuda(rand_init_norm)
+
+        self.optimizer.zero_grad()
+        #output = self.network(data)
+        #del data
+        #l = self.loss(output, target)
+        # loss should compare output[0] and target[0]
+        loss, loss1, loss2, loss3, Yp, advc, Xn, Ypn, idx_n = IMA_loss(self.network, data, Y=target,#Y is a tuple
+                                                                       norm_type=args.norm_type,
+                                                                       rand_init_norm=rand_init_norm,
+                                                                       margin=margin,
+                                                                       max_iter=args.max_iter,
+                                                                       step=step,
+                                                                       refine_Xn_max_iter=args.refine_Xn_max_iter,
+                                                                       Xn1_equal_X=args.Xn1_equal_X,
+                                                                       Xn2_equal_Xn=args.Xn2_equal_Xn,
+                                                                       stop_near_boundary=stop_near_boundary,
+                                                                       stop_if_label_change=stop_if_label_change,
+                                                                       stop_if_label_change_next_step=stop_if_label_change_next_step,
+                                                                       beta=args.beta, beta_position=args.beta_position,
+                                                                       use_optimizer=False,
+                                                                       run_model_std=self.run_model_std_seg,
+                                                                       classify_model_std_output=self.classify_model_std_output_seg,
+                                                                       run_model_adv=self.run_model_adv_seg,
+                                                                       classify_model_adv_output=self.classify_model_adv_output_seg,
+                                                                       pgd_replace_Y_with_Yp=args.pgd_replace_Y_with_Yp,
+                                                                       model_eval_attack=args.model_eval_attack,
+                                                                       model_eval_Xn=args.model_eval_Xn,
+                                                                       model_Xn_advc_p=args.model_Xn_advc_p)        
+
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+        #--------------------
+        """
+        Mp, loss_seg = self.run_model_std_seg(self.network, data, Y=target, return_loss=True, reduction='mean')
+        ((1-args.beta)*loss_seg).backward()
+        if idx_n.shape[0]>0:
+            Mp, loss_seg = self.run_model_std_seg(self.network, Xn, Y=target[idx_n], return_loss=True, reduction='sum')
+            loss_seg=loss_seg/data.shape[0]
+            (args.beta*loss_seg).backward() 
+        """
+        #--------------------
+        self.optimizer.step()
+        #--------------------update the margins
+        Yp_e_Y=self.classify_model_std_output_seg(Yp, target)
+        flag1[idx[advc==0]]=1
+        flag2[idx[Yp_e_Y]]=1
+        
+        if idx_n.shape[0]>0:
+            temp=torch.norm((Xn-data[idx_n]).view(Xn.shape[0], -1), p=args.norm_type, dim=1).cpu()
+            E_new[idx[idx_n]]=torch.min(E_new[idx[idx_n]], temp)
+        #--------------------
+
+        if run_online_evaluation:
+            self.run_online_evaluation(Yp, target)
+
+        del target
+
+        return loss.detach().cpu().numpy(), flag1, flag2, E_new
+    
+    def run_IMA_iteration_old(self, data_generator, args,flag1, flag2, E_new, do_backprop=True, run_online_evaluation=False):
         """
         gradient clipping improves training stability
 

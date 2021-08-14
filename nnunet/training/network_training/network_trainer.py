@@ -582,7 +582,7 @@ class NetworkTrainer(object):
             self.network.train()
             for c in range(self.num_batches_per_epoch):
                 l, flag1, flag2, E_new = self.run_IMA_iteration(self.tr_gen, args,flag1, flag2, E_new, True)
-                #print("batch ",c,"finished")
+                print("batch ",c,"finished")
                 train_losses_epoch.append(l)
             # one epoch finished
             self.all_tr_losses.append(np.mean(train_losses_epoch))
