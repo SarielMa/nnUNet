@@ -519,7 +519,8 @@ def IMA_loss(model, X, Y, margin, norm_type, max_iter, step,
         else:
             idx_n=torch.arange(0,X.size(0))[Yp_e_Y]
         # to be consistant with the output of IMA_loss in RobustDNN_IMA
-        Xn=Xn[idx_n]; Ypn=Ypn[idx_n]
+        Xn=Xn[idx_n] 
+        #Ypn=Ypn[idx_n]
         if idx_n.size(0)>0:   
             loss3 = loss_Xn[idx_n].sum()/X.size(0)
     #--------------------------------------------

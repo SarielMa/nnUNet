@@ -35,8 +35,8 @@ from torch.cuda.amp import autocast
 from nnunet.training.learning_rate.poly_lr import poly_lr
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_loss
-
-from nnunet.training.loss_functions.dice_loss import DiceIndex
+from nnunet.training.loss_functions.dice_loss import My_DC_and_CE_loss
+from nnunet.training.loss_functions.dice_loss import MyDiceIndex
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -51,7 +51,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
                  unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
                          deterministic, fp16)
-        self.max_num_epochs = 100
+        self.max_num_epochs = 2
         self.initial_lr = 1e-2
         self.deep_supervision_scales = None
         self.ds_loss_weights = None
@@ -93,6 +93,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
             self.ds_loss_weights = weights
             # now wrap the loss
             self.loss = MultipleOutputLoss2(self.loss, self.ds_loss_weights)
+            self.loss2 = MultipleOutputLoss2(My_DC_and_CE_loss({'batch_dice': False, 'smooth': 1e-5, 'do_bg': False}, {}), self.ds_loss_weights)
             ################# END ###################
 
             self.folder_with_preprocessed_data = join(self.dataset_directory, self.plans['data_identifier'] +
@@ -311,7 +312,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         return Ypn_e_Y
     """
     def classify_model_std_output_seg(self,Yp, Y):
-        valDice = DiceIndex()
+        valDice = MyDiceIndex(batch_dice=False)
         Yp = Yp[0]
         Y = Y[0]
         dice=valDice(Yp, Y)
@@ -320,8 +321,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
     #
     def classify_model_adv_output_seg(self,Ypn, Y):
         #Y could be Ytrue or Ypred
-        valDice = DiceIndex()
-        Yp = Yp[0]
+        valDice = MyDiceIndex(batch_dice=False)
+        Yp = Ypn[0]
         Y = Y[0]
         dice=valDice(Yp, Y)
         Ypn_e_Y=(dice>0.85)
@@ -330,16 +331,31 @@ class nnUNetTrainerV2(nnUNetTrainer):
     def run_model_std_seg(self, model, X, Y=None, return_loss=False, reduction='none'):
         Z=model(X)    
         if return_loss == True:
-            loss=self.loss(Z, Y)
-            return Z, loss
+            loss=self.loss2(Z, Y)
+            if reduction =='sum':
+                return Z, loss.sum()
+            elif reduction == 'mean':
+                return Z, loss.mean()
+            else:
+                return Z, loss
         else:
             return Z
     #
     def run_model_adv_seg(self, model, X, Y=None, return_loss=False, reduction='sum'):
+        valDice = MyDiceIndex(batch_dice=False)
         Z=model(X)
+        
+             
         if return_loss == True:
-            loss_dice=self.loss(Z, Y)
-            return Z, loss_dice
+            Yp = Z[0]
+            Y = Y[0]  
+            loss_dice=1-valDice(Yp, Y)
+            if reduction =='sum':
+                return Z, loss_dice.sum()
+            elif reduction == 'mean':
+                return Z, loss_dice.mean()
+            else:
+                return Z, loss_dice
         else:
             return Z
     
@@ -390,7 +406,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         #del data
         #l = self.loss(output, target)
         # loss should compare output[0] and target[0]
-        loss, loss1, loss2, loss3, Yp, advc, Xn, Ypn, idx_n = IMA_loss(self.network, data, Y=target,#Y is a tuple
+        loss, loss1, loss2, loss3, Yp, advc, Xn, _, idx_n = IMA_loss(self.network, data, Y=target,#Y is a tuple
                                                                        norm_type=args.norm_type,
                                                                        rand_init_norm=rand_init_norm,
                                                                        margin=margin,
