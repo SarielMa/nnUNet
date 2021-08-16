@@ -189,15 +189,26 @@ def main(noise, filename):
 
 
 if __name__ == "__main__":
-    noises = [0.01,0.05]
+    noises = [0, 0.01,0.03, 0.05, 0.07, 0.1, 0.2, 0.3]
     nets = ["nnUnet", "IMA"]
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/Task005_Prostate/nnUNetTrainerV2__nnUNetPlansv2.1"
-    folders = ["fold_0_old/model_final_checkpoint.model","fold_0/model_latest.model"]
+    folders = ["fold_0_old/model_final_checkpoint.model","fold_0_seg_D5_IMA/model_IMA_final_checkpoint.model"]
+    
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111)
+
+
+    yAxises = []
     for i, net in enumerate(nets):
-        yAxis = [main(noise, join(basePath, folders[i])) for noise in noises]
-        plt.plot(noises, yAxis, label=net)
-    plt.legend()
-    plt.xlabel("noise(Linf)")
-    plt.ylabel("Avg Dice Index")
-    plt.savefig("adv_result.png")
+        yAxises.append([main(noise, join(basePath, folders[i])) for noise in noises])
+
+    ax.plot(noises, yAxises[0], color='b', label=nets[0])
+    ax.plot(noises, yAxises[1], color='r', label=nets[1])
+    ax.set_title("Sports Watch Data")
+    ax.set_xlabel("noise(Linf)")
+    ax.set_ylabel("Avg Dice Index")
+    ax.set_ylim(0,1)
+    ax.legend()
+    ax.grid()
+    fig.savefig("adv_result.png")
         

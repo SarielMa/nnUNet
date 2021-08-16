@@ -100,7 +100,7 @@ class NetworkTrainer(object):
         self.train_loss_MA_alpha = 0.93  # alpha * old + (1-alpha) * new
         self.train_loss_MA_eps = 5e-4  # new MA must be at least this much better (smaller)
         self.max_num_epochs = 1000
-        self.num_batches_per_epoch = 100
+        self.num_batches_per_epoch = 50
         self.num_val_batches_per_epoch = 30
         self.also_val_in_tr_mode = False
         self.lr_threshold = 1e-6  # the network will not terminate training if the lr is still above this threshold
@@ -1040,7 +1040,7 @@ class NetworkTrainer(object):
             target = to_cuda(target)
         
         self.optimizer.zero_grad()
-        Xn = self. pgd_attack(self.network, data, target, noise, "Linf", 20, 0.01/5, use_optimizer=False, loss_fn=self.loss)
+        Xn = self. pgd_attack(self.network, data, target, noise, "Linf", 100, 0.01/5, use_optimizer=False, loss_fn=self.loss)
         
         ret = 0
         valDice = DiceIndex()
