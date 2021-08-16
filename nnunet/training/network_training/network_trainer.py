@@ -1040,7 +1040,11 @@ class NetworkTrainer(object):
             target = to_cuda(target)
         
         self.optimizer.zero_grad()
-        Xn = self. pgd_attack(self.network, data, target, noise, "Linf", 100, 0.01/5, use_optimizer=False, loss_fn=self.loss)
+        Xn = 0
+        if noise == 0:
+            Xn = data
+        else:
+            Xn = self. pgd_attack(self.network, data, target, noise, "Linf", 100, 0.01/5, use_optimizer=False, loss_fn=self.loss)
         
         ret = 0
         valDice = DiceIndex()
@@ -1101,7 +1105,7 @@ class NetworkTrainer(object):
             #print ("for this iteration, dice is ", str(l))
             #val_losses.append(l)          
             counter +=1
-            if counter >=2:
+            if counter >=5:
                 break
             
         ret = self.my_finish_online_evaluation()
