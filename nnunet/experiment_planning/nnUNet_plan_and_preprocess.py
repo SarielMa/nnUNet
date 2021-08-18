@@ -35,7 +35,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_ids", default =["005"] , nargs="+", help="List of integers belonging to the task ids you wish to run"
+    parser.add_argument("-t", "--task_ids", default =["004"] , nargs="+", help="List of integers belonging to the task ids you wish to run"
                                                             " experiment planning and preprocessing for. Each of these "
                                                             "ids must, have a matching folder 'TaskXXX_' in the raw "
                                                             "data folder")

@@ -107,7 +107,7 @@ def main():
     network = args.network
     network_trainer = args.network_trainer
     """
-    task = "005"
+    task = "004"
     fold = "0"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"

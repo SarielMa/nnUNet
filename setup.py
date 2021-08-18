@@ -25,9 +25,9 @@ setup(name='nnunet',
       ],
       entry_points={
           'console_scripts': [
-              'nnUNet_convert_decathlon_task = nnunet.experiment_planning.nnUNet_convert_decathlon_task:main',
-              'nnUNet_plan_and_preprocess = nnunet.experiment_planning.nnUNet_plan_and_preprocess:main',
-              'nnUNet_train = nnunet.run.run_training:main',
+              'nnUNet_convert_decathlon_task = nnunet.experiment_planning.nnUNet_convert_decathlon_task:main',# this is the first step
+              'nnUNet_plan_and_preprocess = nnunet.experiment_planning.nnUNet_plan_and_preprocess:main',# this is the second step
+              'nnUNet_train = nnunet.run.run_training:main',# then you can train and validate
               'nnUNet_train_DP = nnunet.run.run_training_DP:main',
               'nnUNet_train_DDP = nnunet.run.run_training_DDP:main',
               'nnUNet_predict = nnunet.inference.predict_simple:main',

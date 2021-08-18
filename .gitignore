@@ -115,3 +115,13 @@ ENV/
 
 *.tar
 *.json
+rawData/nnUNet_raw_data/Task02_Heart/Task02_Heart/._imagesTr
+rawData/nnUNet_raw_data/Task02_Heart/Task02_Heart/._imagesTs
+rawData/nnUNet_raw_data/Task02_Heart/Task02_Heart/._labelsTr
+rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/._.DS_Store
+rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/._imagesTr
+rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/._imagesTs
+rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/._labelsTr
+rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/.DS_Store
+rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/labelsTr/._.DS_Store
+rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/labelsTr/.DS_Store
