@@ -29,12 +29,11 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetTrainerCascadeFullRes
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
-import matplotlib.pyplot as plt
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
 
-def main(noise, filename):
+def main():
     parser = argparse.ArgumentParser()
     """
     parser.add_argument("network")
@@ -112,8 +111,7 @@ def main(noise, filename):
     fold = "0"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"
-    #validation_only = args.validation_only
-    validation_only = False
+    validation_only = args.validation_only
     plans_identifier = args.p
     find_lr = args.find_lr
     disable_postprocessing_on_folds = args.disable_postprocessing_on_folds
@@ -164,7 +162,7 @@ def main(noise, filename):
     else:
         assert issubclass(trainer_class,
                           nnUNetTrainer), "network_trainer was found but is not derived from nnUNetTrainer"
-    # e.g. nnUNetTrainerV2
+
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
@@ -177,38 +175,40 @@ def main(noise, filename):
         # the training chashes
         trainer.save_latest_only = True  # if false it will not store/overwrite _latest but separate files each
 
-    trainer.initialize(training = not validation_only)#only validate it
+    trainer.initialize(not validation_only)
 
+    if find_lr:
+        trainer.find_lr()
+    else:
+        if not validation_only:
+            if args.continue_training:
+                # -c was set, continue a previous training and ignore pretrained weights
+                trainer.load_latest_checkpoint()
+            elif (not args.continue_training) and (args.pretrained_weights is not None):
+                # we start a new training. If pretrained_weights are set, use them
+                load_pretrained_weights(trainer.network, args.pretrained_weights)
+            else:
+                # new training without pretraine weights, do nothing
+                pass
 
-    trainer.my_load_final_checkpoint(filename, train=False)
-    return trainer.run_validate_adv(noise)
-    
-      
+            trainer.run_PGD_training()
+        else:
+            if valbest:
+                trainer.load_best_checkpoint(train=False)
+            else:
+                trainer.load_final_checkpoint(train=False)
 
+        trainer.network.eval()
 
+        # predict validation
+        trainer.validate(save_softmax=args.npz, validation_folder_name=val_folder,
+                         run_postprocessing_on_folds=not disable_postprocessing_on_folds,
+                         overwrite=args.val_disable_overwrite)
+
+        if network == '3d_lowres' and not args.disable_next_stage_pred:
+            print("predicting segmentations for the next stage of the cascade")
+            predict_next_stage(trainer, join(dataset_directory, trainer.plans['data_identifier'] + "_stage%d" % 1))
 
 
 if __name__ == "__main__":
-    noises = [0, 0.01,0.03, 0.05, 0.07, 0.1, 0.2, 0.3]
-    nets = ["nnUnet", "IMA"]
-    basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/Task004_Hippocampus/nnUNetTrainerV2__nnUNetPlansv2.1"
-    folders = ["fold_0_base/model_final_checkpoint.model","fold_0_IMA/model_IMA_final_checkpoint.model"]
-    
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111)
-
-
-    yAxises = []
-    for i, net in enumerate(nets):
-        yAxises.append([main(noise, join(basePath, folders[i])) for noise in noises])
-
-    ax.plot(noises, yAxises[0], color='b', label=nets[0])
-    ax.plot(noises, yAxises[1], color='r', label=nets[1])
-    ax.set_title("D4 Data")
-    ax.set_xlabel("noise(Linf)")
-    ax.set_ylabel("Avg Dice Index")
-    ax.set_ylim(0,1)
-    ax.legend()
-    ax.grid()
-    fig.savefig("adv_result_D4.png")
-        
+    main()

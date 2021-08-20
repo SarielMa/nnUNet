@@ -37,6 +37,7 @@ from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_loss
 from nnunet.training.loss_functions.dice_loss import My_DC_and_CE_loss
 from nnunet.training.loss_functions.dice_loss import MyDiceIndex
+from nnunet.IMA.PGD import pgd_attack
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -358,7 +359,48 @@ class nnUNetTrainerV2(nnUNetTrainer):
                 return Z, loss_dice
         else:
             return Z
-    
+
+    def run_PGD_iteration(self, data_generator, args, do_backprop=True, run_online_evaluation=False):
+        """
+        gradient clipping improves training stability
+
+        :param data_generator:
+        :param do_backprop:
+        :param run_online_evaluation:
+        :return:
+        """
+        data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']
+
+
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)
+        
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+
+        self.optimizer.zero_grad()
+        Z = self.network(data)
+        loss_P = self.loss(Z, target)
+        Xn = pgd_attack(self.network, data, target, args.noise, args.norm_type, args.max_iter, args.step, loss_fn=self.loss)
+        Zn = self.network(Xn)
+        loss_N = self.loss(Zn, target)
+        loss = 0.5*loss_N + 0.5*loss_P
+        loss.backward()
+        # do the back propagation
+        torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+        self.optimizer.step()
+        
+        del data
+        if run_online_evaluation:
+            self.run_online_evaluation(Z, target)
+
+        del target
+
+        return loss.detach().cpu().numpy()
     
     def run_IMA_iteration(self, data_generator, args,flag1, flag2, E_new, do_backprop=True, run_online_evaluation=False):
         """
@@ -755,5 +797,21 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ds = self.network.do_ds
         self.network.do_ds = True
         ret = super().run_IMA_training(self.dl_tr.counter)#pass the number of samples in training set
+        self.network.do_ds = ds
+        return ret
+    
+    def run_PGD_training(self):
+        """
+        if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
+        continued epoch with self.initial_lr
+
+        we also need to make sure deep supervision in the network is enabled for training, thus the wrapper
+        :return:
+        """
+        self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we
+        # want at the start of the training
+        ds = self.network.do_ds
+        self.network.do_ds = True
+        ret = super().run_PGD_training()#pass the number of samples in training set
         self.network.do_ds = ds
         return ret

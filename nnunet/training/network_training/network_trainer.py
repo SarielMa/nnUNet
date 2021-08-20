@@ -513,7 +513,7 @@ class NetworkTrainer(object):
     class IMA_params:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 0.1
+            self.noise = 0.3
             self.norm_type = np.inf
             self.alpha = 4
             self.max_iter = 20
@@ -530,6 +530,108 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0
+            
+    class PGD_params:
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 0.3
+            self.norm_type = np.inf
+            self.max_iter = 20
+            self.step = 0.01
+
+            
+    def run_PGD_training(self):
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+
+        _ = self.tr_gen.next()
+        _ = self.val_gen.next()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+        maybe_mkdir_p(self.output_folder)        
+        self.plot_network_architecture()
+
+        # config IMA parameters
+        #######################################################################################
+        args = self.PGD_params()
+        #args.E=args.delta*torch.ones(counter, dtype=torch.float32)
+        #E_new=args.E.detach().clone()
+        #######################################################################################
+
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        while self.epoch < self.max_num_epochs:
+            self.print_to_log_file("\nepoch: ", self.epoch)
+            epoch_start_time = time()
+            train_losses_epoch = []
+            #----------------------------
+            #flag1=torch.zeros(len(args.E), dtype=torch.float32)
+            #flag2=torch.zeros(len(args.E), dtype=torch.float32)
+            #E_new=args.E.detach().clone()
+            #---------------------------
+            # train one epoch-------------------------------------------------------------------------------------------------
+            self.network.train()
+            for c in range(self.num_batches_per_epoch):
+                l = self.run_PGD_iteration(self.tr_gen, args, True)
+                print("batch ",c,"finished, PGD train")
+                train_losses_epoch.append(l)
+            # one epoch finished
+            self.all_tr_losses.append(np.mean(train_losses_epoch))
+            self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
+            #-----------------------------------------------------------------------------------------------------------------
+            with torch.no_grad():
+                # validation with train=False
+                self.network.eval()
+                val_losses = []
+                # run one epoch.....
+                for b in range(self.num_val_batches_per_epoch):
+                    l = self.run_iteration(self.val_gen, False, True)
+                    val_losses.append(l)
+   
+                self.all_val_losses.append(np.mean(val_losses))
+                self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
+
+                if self.also_val_in_tr_mode:
+                    self.network.train()
+                    # validation with train=True
+                    val_losses = []
+                    for b in range(self.num_val_batches_per_epoch):
+                        l = self.run_iteration(self.val_gen, False)
+                        val_losses.append(l)
+                    self.all_val_losses_tr_mode.append(np.mean(val_losses))
+                    self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
+
+            self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
+
+            continue_training = self.on_epoch_end()
+
+            epoch_end_time = time()
+
+            if not continue_training:
+                # allows for early stopping
+                break
+
+            self.epoch += 1
+            self.print_to_log_file("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
+
+        self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
+
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_PGD_final_checkpoint.model"))
+        # now we can delete latest as it will be identical with final
+        if isfile(join(self.output_folder, "model_PGD_latest.model")):
+            os.remove(join(self.output_folder, "model_PGD_latest.model"))
+        if isfile(join(self.output_folder, "model_PGD_latest.model.pkl")):
+            os.remove(join(self.output_folder, "model_PGD_latest.model.pkl"))
             
     def plot_E(self, E, noise, filename=None):
         fig, ax = plt.subplots()
@@ -636,6 +738,8 @@ class NetworkTrainer(object):
             os.remove(join(self.output_folder, "model_IMA_latest.model"))
         if isfile(join(self.output_folder, "model_IMA_latest.model.pkl")):
             os.remove(join(self.output_folder, "model_IMA_latest.model.pkl"))
+
+
 
     def maybe_update_lr(self):
         # maybe update learning rate
@@ -1044,7 +1148,7 @@ class NetworkTrainer(object):
         if noise == 0:
             Xn = data
         else:
-            Xn = self. pgd_attack(self.network, data, target, noise, "Linf", 100, 0.01/5, use_optimizer=False, loss_fn=self.loss)
+            Xn = self.pgd_attack(self.network, data, target, noise, "Linf", 100, 0.01/5, use_optimizer=False, loss_fn=self.loss)
         
         ret = 0
         valDice = DiceIndex()

@@ -324,6 +324,10 @@ class nnUNetTrainer(NetworkTrainer):
         self.save_debug_information()
         super(nnUNetTrainer, self).run_IMA_training(counter)
         
+    def run_PGD_training(self):
+        self.save_debug_information()
+        super(nnUNetTrainer, self).run_PGD_training()
+        
     def run_validate_adv(self, noise):
         self.save_debug_information()
         return super(nnUNetTrainer, self).run_validate_adv(noise)
