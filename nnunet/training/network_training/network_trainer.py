@@ -583,7 +583,7 @@ class NetworkTrainer(object):
             self.network.train()
             for c in range(self.num_batches_per_epoch):
                 l = self.run_PGD_iteration(self.tr_gen, args, True)
-                print("batch ",c,"finished, PGD train")
+                #print("batch ",c,"finished, PGD train")
                 train_losses_epoch.append(l)
             # one epoch finished
             self.all_tr_losses.append(np.mean(train_losses_epoch))
