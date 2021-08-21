@@ -189,11 +189,12 @@ def main(noise, filename):
 
 
 if __name__ == "__main__":
-    noises = [0, 0.01,0.03, 0.05, 0.07, 0.1, 0.2, 0.3]
+    noises = [0, 0.05, 0.1,0.2,0.3,0.4,0.5]
+    #noises = [0, 0.05]
     #noises = [0]
-    nets = ["nnUnet", "IMA"]
+    nets = ["nnUnet", "PGD0.3","IMA0.3"]
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/Task004_Hippocampus/nnUNetTrainerV2__nnUNetPlansv2.1"
-    folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD/model_PGD_final_checkpoint.model"]
+    folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD/model_PGD_final_checkpoint.model","fold_0_IMA_0.3_D4/model_IMA_final_checkpoint.model"]
     
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111)
@@ -205,6 +206,7 @@ if __name__ == "__main__":
 
     ax.plot(noises, yAxises[0], color='b', label=nets[0])
     ax.plot(noises, yAxises[1], color='r', label=nets[1])
+    ax.plot(noises, yAxises[2], color='g', label=nets[2])
     ax.set_title("D4 Data")
     ax.set_xlabel("noise(Linf)")
     ax.set_ylabel("Avg Dice Index")
