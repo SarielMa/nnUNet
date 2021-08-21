@@ -100,7 +100,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
             self.folder_with_preprocessed_data = join(self.dataset_directory, self.plans['data_identifier'] +
                                                       "_stage%d" % self.stage)
             if training:
-                self.dl_tr, self.dl_val = self.get_basic_generators()
+                self.dl_tr, self.dl_val, self.dl_ts = self.get_basic_generators()
                 if self.unpack_data:
                     print("unpacking dataset")
                     unpack_dataset(self.folder_with_preprocessed_data)
@@ -110,8 +110,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
                         "INFO: Not unpacking data! Training may be slow due to that. Pray you are not using 2d or you "
                         "will wait all winter for your model to finish!")
 
-                self.tr_gen, self.val_gen = get_moreDA_augmentation(
-                    self.dl_tr, self.dl_val,
+                self.tr_gen, self.val_gen, self.ts_gen = get_moreDA_augmentation(
+                    self.dl_tr, self.dl_val, self.dl_ts,
                     self.data_aug_params[
                         'patch_size_for_spatialtransform'],
                     self.data_aug_params,

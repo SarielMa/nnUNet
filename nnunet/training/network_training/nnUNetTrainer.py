@@ -33,7 +33,7 @@ from nnunet.network_architecture.neural_network import SegmentationNetwork
 from nnunet.postprocessing.connected_components import determine_postprocessing
 from nnunet.training.data_augmentation.default_data_augmentation import default_3D_augmentation_params, \
     default_2D_augmentation_params, get_default_augmentation, get_patch_size
-from nnunet.training.dataloading.dataset_loading import load_dataset, DataLoader3D, DataLoader2D, unpack_dataset
+from nnunet.training.dataloading.dataset_loading import load_dataset, DataLoader3D, DataLoader2D, unpack_dataset, MyDataLoader2D
 from nnunet.training.loss_functions.dice_loss import DC_and_CE_loss
 from nnunet.training.network_training.network_trainer import NetworkTrainer
 from nnunet.utilities.nd_softmax import softmax_helper
@@ -428,7 +428,10 @@ class nnUNetTrainer(NetworkTrainer):
             dl_val = DataLoader2D(self.dataset_val, self.patch_size, self.patch_size, self.batch_size,
                                   oversample_foreground_percent=self.oversample_foreground_percent,
                                   pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r')
-        return dl_tr, dl_val
+            dl_test = MyDataLoader2D(self.dataset_val, self.patch_size, self.patch_size, self.batch_size,
+                                  oversample_foreground_percent=self.oversample_foreground_percent,
+                                  pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r')
+        return dl_tr, dl_val, dl_test
 
     def preprocess_patient(self, input_files):
         """

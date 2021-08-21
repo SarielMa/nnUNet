@@ -34,7 +34,7 @@ except ImportError as ie:
     NonDetMultiThreadedAugmenter = None
 
 
-def get_moreDA_augmentation(dataloader_train, dataloader_val, patch_size, params=default_3D_augmentation_params,
+def get_moreDA_augmentation(dataloader_train, dataloader_val, dataloader_ts, patch_size, params=default_3D_augmentation_params,
                             border_val_seg=-1,
                             seeds_train=None, seeds_val=None, order_seg=1, order_data=3, deep_supervision_scales=None,
                             soft_ds=False,
@@ -147,7 +147,7 @@ def get_moreDA_augmentation(dataloader_train, dataloader_val, patch_size, params
 
     tr_transforms.append(NumpyToTensor(['data', 'target'], 'float'))
     tr_transforms = Compose(tr_transforms)
-    
+    """
     if use_nondetMultiThreadedAugmenter:
         if NonDetMultiThreadedAugmenter is None:
             raise RuntimeError('NonDetMultiThreadedAugmenter is not yet available')
@@ -158,8 +158,8 @@ def get_moreDA_augmentation(dataloader_train, dataloader_val, patch_size, params
         batchgenerator_train = MultiThreadedAugmenter(dataloader_train, tr_transforms, params.get('num_threads'),
                                                       params.get("num_cached_per_thread"),
                                                       seeds=seeds_train, pin_memory=pin_memory)
-    
-    #batchgenerator_train = SingleThreadedAugmenter(dataloader_train, tr_transforms)
+    """
+    batchgenerator_train = SingleThreadedAugmenter(dataloader_train, tr_transforms)
     # import IPython;IPython.embed()
 
     val_transforms = []
@@ -187,7 +187,7 @@ def get_moreDA_augmentation(dataloader_train, dataloader_val, patch_size, params
 
     val_transforms.append(NumpyToTensor(['data', 'target'], 'float'))
     val_transforms = Compose(val_transforms)
-    
+    """
     if use_nondetMultiThreadedAugmenter:
         if NonDetMultiThreadedAugmenter is None:
             raise RuntimeError('NonDetMultiThreadedAugmenter is not yet available')
@@ -200,8 +200,50 @@ def get_moreDA_augmentation(dataloader_train, dataloader_val, patch_size, params
                                                     max(params.get('num_threads') // 2, 1),
                                                     params.get("num_cached_per_thread"),
                                                     seeds=seeds_val, pin_memory=pin_memory)
+    """
+    batchgenerator_val = SingleThreadedAugmenter(dataloader_val, val_transforms)
     
-    #batchgenerator_val = SingleThreadedAugmenter(dataloader_val, val_transforms)
+    
+    ts_transform = []
+    ts_transform.append(RemoveLabelTransform(-1, 0))
+    if params.get("selected_data_channels") is not None:
+        ts_transform.append(DataChannelSelectionTransform(params.get("selected_data_channels")))
+    if params.get("selected_seg_channels") is not None:
+        ts_transform.append(SegChannelSelectionTransform(params.get("selected_seg_channels")))
 
-    return batchgenerator_train, batchgenerator_val
+    if params.get("move_last_seg_chanel_to_data") is not None and params.get("move_last_seg_chanel_to_data"):
+        ts_transform.append(MoveSegAsOneHotToData(1, params.get("all_segmentation_labels"), 'seg', 'data'))
+
+    ts_transform.append(RenameTransform('seg', 'target', True))
+
+    if regions is not None:
+        ts_transform.append(ConvertSegmentationToRegionsTransform(regions, 'target', 'target'))
+
+    if deep_supervision_scales is not None:
+        if soft_ds:
+            assert classes is not None
+            ts_transform.append(DownsampleSegForDSTransform3(deep_supervision_scales, 'target', 'target', classes))
+        else:
+            ts_transform.append(DownsampleSegForDSTransform2(deep_supervision_scales, 0, 0, input_key='target',
+                                                               output_key='target'))
+
+    ts_transform.append(NumpyToTensor(['data', 'target'], 'float'))
+    ts_transform = Compose(ts_transform)
+    """
+    if use_nondetMultiThreadedAugmenter:
+        if NonDetMultiThreadedAugmenter is None:
+            raise RuntimeError('NonDetMultiThreadedAugmenter is not yet available')
+        batchgenerator_val = NonDetMultiThreadedAugmenter(dataloader_ts, ts_transform,
+                                                          max(params.get('num_threads') // 2, 1),
+                                                          params.get("num_cached_per_thread"),
+                                                          seeds=seeds_val, pin_memory=pin_memory)
+    else:
+        batchgenerator_val = MultiThreadedAugmenter(dataloader_ts, ts_transform,
+                                                    max(params.get('num_threads') // 2, 1),
+                                                    params.get("num_cached_per_thread"),
+                                                    seeds=seeds_val, pin_memory=pin_memory)
+    """
+    batchgenerator_ts = SingleThreadedAugmenter(dataloader_ts, ts_transform)
+
+    return batchgenerator_train, batchgenerator_val, batchgenerator_ts
 

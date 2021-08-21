@@ -190,9 +190,10 @@ def main(noise, filename):
 
 if __name__ == "__main__":
     noises = [0, 0.01,0.03, 0.05, 0.07, 0.1, 0.2, 0.3]
+    #noises = [0]
     nets = ["nnUnet", "IMA"]
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/Task004_Hippocampus/nnUNetTrainerV2__nnUNetPlansv2.1"
-    folders = ["fold_0_base/model_final_checkpoint.model","fold_0_IMA/model_IMA_final_checkpoint.model"]
+    folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD/model_PGD_final_checkpoint.model"]
     
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111)

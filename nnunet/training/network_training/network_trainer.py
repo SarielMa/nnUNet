@@ -1150,8 +1150,8 @@ class NetworkTrainer(object):
         else:
             Xn = self.pgd_attack(self.network, data, target, noise, "Linf", 100, 0.01/5, use_optimizer=False, loss_fn=self.loss)
         
-        ret = 0
-        valDice = DiceIndex()
+        #ret = 0
+        #valDice = DiceIndex()
         with torch.no_grad():
             output = self.network(Xn)
             #Yp = self.maskIt(output[0])
@@ -1197,21 +1197,18 @@ class NetworkTrainer(object):
         if not self.was_initialized:
             self.initialize(True)
 
-        counter = 1
+        #counter = 1
         epoch_start_time = time()
         # validation with train=False
         self.network.eval()
         #val_losses = []
         #counter = 0
         #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
-        for data_dict in self.val_gen:
+        for data_dict in self.ts_gen:
             self.run_one_adv(data_dict, noise)
-            #print ("for this iteration, dice is ", str(l))
-            #val_losses.append(l)          
-            counter +=1
-            if counter >=5:
+            if data_dict['last']:
                 break
-            
+
         ret = self.my_finish_online_evaluation()
         #self.all_val_losses.append(np.mean(val_losses))
         validationDice = np.mean(ret)
