@@ -1174,6 +1174,7 @@ class NetworkTrainer(object):
         #return l.detach().cpu().numpy() #this is the result, not the one for backpropagation
 #%% adversarial part   
     def run_validate_adv(self, noise):
+        print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
         if not torch.cuda.is_available():
             self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
 
@@ -1197,7 +1198,7 @@ class NetworkTrainer(object):
         if not self.was_initialized:
             self.initialize(True)
 
-        #counter = 1
+        counter = 1
         epoch_start_time = time()
         # validation with train=False
         self.network.eval()
@@ -1206,8 +1207,12 @@ class NetworkTrainer(object):
         #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
         for data_dict in self.ts_gen:
             self.run_one_adv(data_dict, noise)
+            print ("one batch is done")
             if data_dict['last']:
                 break
+            if counter ==2:
+                break
+            counter +=1
 
         ret = self.my_finish_online_evaluation()
         #self.all_val_losses.append(np.mean(val_losses))
