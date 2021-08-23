@@ -54,7 +54,7 @@ def main():
                                                  "This utility will convert 4D MSD data into the format nnU-Net "
                                                  "expects")
     parser.add_argument("-i", help="Input folder. Must point to a TaskXX_TASKNAME folder as downloaded from the MSD "
-                                   "website", default="C:/Research/IMA_on_segmentation/nnUnet/nnUNet/rawData/nnUNet_raw_data/Task04_Hippocampus")
+                                   "website", default="C:/Research/IMA_on_segmentation/nnUnet/nnUNet/rawData/nnUNet_raw_data/Task09_Spleen")
     parser.add_argument("-p", required=False, default=default_num_threads, type=int,
                         help="Use this to specify how many processes are used to run the script. "
                              "Default is %d" % default_num_threads)

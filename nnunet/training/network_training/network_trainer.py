@@ -101,7 +101,7 @@ class NetworkTrainer(object):
         self.train_loss_MA_eps = 5e-4  # new MA must be at least this much better (smaller)
         self.max_num_epochs = 1000
         self.num_batches_per_epoch = 50
-        self.num_val_batches_per_epoch = 30
+        self.num_val_batches_per_epoch = 3
         self.also_val_in_tr_mode = False
         self.lr_threshold = 1e-6  # the network will not terminate training if the lr is still above this threshold
 
@@ -509,7 +509,7 @@ class NetworkTrainer(object):
             os.remove(join(self.output_folder, "model_latest.model"))
         if isfile(join(self.output_folder, "model_latest.model.pkl")):
             os.remove(join(self.output_folder, "model_latest.model.pkl"))
-            
+
     class IMA_params:
         def __init__(self):           
             #used to pass parameters to ima iteration
@@ -523,6 +523,27 @@ class NetworkTrainer(object):
             self.beta_position =1
             self.E = 0
             self.epoch_refine = 100
+            self.delta = self.noise/self.epoch_refine
+            self.model_eval_attack=0
+            self.model_eval_Xn=0
+            self.model_Xn_advc_p=0
+            self.Xn1_equal_X =0
+            self.Xn2_equal_Xn =0
+            self.pgd_replace_Y_with_Yp=0            
+
+    class IMA_params_large_step:
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 0.3
+            self.norm_type = np.inf
+            self.alpha = 8
+            self.max_iter = 20
+            self.stop = 1
+            self.refine_Xn_max_iter = 10
+            self.beta = 0.5
+            self.beta_position =1
+            self.E = 0
+            self.epoch_refine = 20
             self.delta = self.noise/self.epoch_refine
             self.model_eval_attack=0
             self.model_eval_Xn=0
@@ -695,6 +716,7 @@ class NetworkTrainer(object):
             self.plot_E(args.E, args.noise,'histE')           
             
             #------
+            
             with torch.no_grad():
                 # validation with train=False
                 self.network.eval()
@@ -716,6 +738,7 @@ class NetworkTrainer(object):
                         val_losses.append(l)
                     self.all_val_losses_tr_mode.append(np.mean(val_losses))
                     self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
+            
 
             self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
 
@@ -1210,7 +1233,7 @@ class NetworkTrainer(object):
             print ("one batch is done")
             if data_dict['last']:
                 break
-            if counter ==2:
+            if counter ==3:
                 break
             counter +=1
 

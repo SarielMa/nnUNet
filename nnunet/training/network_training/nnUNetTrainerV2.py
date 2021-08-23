@@ -326,7 +326,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Yp = Ypn[0]
         Y = Y[0]
         dice=valDice(Yp, Y)
-        Ypn_e_Y=(dice>0.85)
+        Ypn_e_Y=(dice>0.5)
         return Ypn_e_Y
     
     def run_model_std_seg(self, model, X, Y=None, return_loss=False, reduction='none'):
@@ -343,14 +343,10 @@ class nnUNetTrainerV2(nnUNetTrainer):
             return Z
     #
     def run_model_adv_seg(self, model, X, Y=None, return_loss=False, reduction='sum'):
-        valDice = MyDiceIndex(batch_dice=False)
+        #valDice = MyDiceIndex(batch_dice=False)
         Z=model(X)
-        
-             
-        if return_loss == True:
-            Yp = Z[0]
-            Y = Y[0]  
-            loss_dice=1-valDice(Yp, Y)
+        if return_loss == True:  
+            loss_dice=self.loss2(Z, Y)
             if reduction =='sum':
                 return Z, loss_dice.sum()
             elif reduction == 'mean':
@@ -420,7 +416,6 @@ class nnUNetTrainerV2(nnUNetTrainer):
         target = maybe_to_torch(target)
         # parameters that need to be set for IMA
         ###################################################
-
         stop=args.stop
         stop_near_boundary=False
         stop_if_label_change=False
@@ -448,7 +443,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         #del data
         #l = self.loss(output, target)
         # loss should compare output[0] and target[0]
-        loss, loss1, loss2, loss3, Yp, advc, Xn, _, idx_n = IMA_loss(self.network, data, Y=target,#Y is a tuple
+        loss, loss1, loss2, loss3, Yp, advc, Xn, Ypn, idx_n = IMA_loss(self.network, data, Y=target,#Y is a tuple
                                                                        norm_type=args.norm_type,
                                                                        rand_init_norm=rand_init_norm,
                                                                        margin=margin,

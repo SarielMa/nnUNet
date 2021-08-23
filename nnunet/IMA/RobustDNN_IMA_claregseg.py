@@ -109,7 +109,7 @@ def loss_mse_reg(Yp, Y, reduction):
     else:
         raise ValueError('error')
     return loss_mse
-#
+
 def run_model_std_reg(model, X, Y=None, return_loss=False, reduction='sum'):
     Yp=model(X)
     
@@ -517,7 +517,7 @@ def IMA_loss(model, X, Y, margin, norm_type, max_iter, step,
         if model_Xn_advc_p == True:
             idx_n=torch.arange(0,X.size(0))[(advc>0)&(Yp_e_Y)]                
         else:
-            idx_n=torch.arange(0,X.size(0))[Yp_e_Y]
+            idx_n=torch.arange(0,X.size(0))[Yp_e_Y]# in this case, advc is useless. focusing on this is OK
         # to be consistant with the output of IMA_loss in RobustDNN_IMA
         Xn=Xn[idx_n] 
         #Ypn=Ypn[idx_n]
