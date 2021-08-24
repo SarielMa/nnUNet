@@ -196,7 +196,7 @@ if __name__ == "__main__":
     #nets = ["nnUnet", "PGD0.3","IMA0.3"]
     nets = ["IMA0.3"]
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
-    selected = dataset[3]
+    selected = dataset[1]
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
     #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD/model_PGD_final_checkpoint.model","fold_0_IMA_0.3/model_IMA_final_checkpoint.model"]
     folders = ["fold_0_IMA_0.3/model_IMA_final_checkpoint.model"]
