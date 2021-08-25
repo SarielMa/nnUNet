@@ -651,12 +651,18 @@ class nnUNetTrainerV2(nnUNetTrainer):
 
         tr_keys.sort()
         val_keys.sort()
+        valLen = len(val_keys)
+        pivot = int(valLen/3*1)
+        
         self.dataset_tr = OrderedDict()
         for i in tr_keys:
             self.dataset_tr[i] = self.dataset[i]
         self.dataset_val = OrderedDict()
-        for i in val_keys:
+        for i in val_keys[:pivot]:
             self.dataset_val[i] = self.dataset[i]
+        self.dataset_ts = OrderedDict()
+        for i in val_keys[pivot:]:
+            self.dataset_ts[i] = self.dataset[i]
 
     def setup_DA_params(self):
         """

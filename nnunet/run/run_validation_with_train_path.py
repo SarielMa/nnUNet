@@ -189,14 +189,14 @@ def main(noise, filename, taskid):
 
 
 if __name__ == "__main__":
-    noises = [0, 0.05, 0.1,0.3,0.5]# for D4
-    noises = [0, 0.01, 0.05, 0.1]# for D2
+    noises = [0, 0.1,0.3,0.5]# for D2
+    #noises = [0, 0.01, 0.05, 0.1]# for D2
     #noises = [0, 0.05]
     #noises = [0]
     #nets = ["nnUnet", "PGD0.3","IMA0.3"]
     nets = ["IMA0.3"]
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
-    selected = dataset[1]
+    selected = dataset[0]
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
     #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD/model_PGD_final_checkpoint.model","fold_0_IMA_0.3/model_IMA_final_checkpoint.model"]
     folders = ["fold_0_IMA_0.3/model_IMA_final_checkpoint.model"]
