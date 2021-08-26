@@ -513,8 +513,8 @@ class NetworkTrainer(object):
     class IMA_params:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 0.3
-            self.norm_type = np.inf
+            self.noise = 1.0
+            self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
             self.stop = 1
@@ -556,7 +556,7 @@ class NetworkTrainer(object):
         def __init__(self):           
             #used to pass parameters to ima iteration
             self.noise = 0.3
-            self.norm_type = np.inf
+            self.norm_type = 2
             self.max_iter = 20
             self.step = 0.01
 
@@ -713,7 +713,7 @@ class NetworkTrainer(object):
             #------update the margin
             IMA_update_margin(args, args.delta, args.noise, flag1, flag2, E_new)
             print('IMA_update_margin: done, margin updated')    
-            self.plot_E(args.E, args.noise,'histE')           
+            self.plot_E(args.E, args.noise,join(self.output_folder, 'histE'))           
             
             #------
             
@@ -1171,7 +1171,7 @@ class NetworkTrainer(object):
         if noise == 0:
             Xn = data
         else:
-            Xn = self.pgd_attack(self.network, data, target, noise, "Linf", 100, 0.01/5, use_optimizer=False, loss_fn=self.loss)
+            Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.01, use_optimizer=False, loss_fn=self.loss)
         
         #ret = 0
         #valDice = DiceIndex()

@@ -313,19 +313,21 @@ class nnUNetTrainerV2(nnUNetTrainer):
         return Ypn_e_Y
     """
     def classify_model_std_output_seg(self,Yp, Y):
-        valDice = MyDiceIndex(batch_dice=False)
+        #valDice = MyDiceIndex(batch_dice=False)
         Yp = Yp[0]
         Y = Y[0]
-        dice=valDice(Yp, Y)
+        #dice=valDice(Yp, Y)
+        dice = super().getOnlineDice(Yp, Y)
         Yp_e_Y=(dice>0.5)
         return Yp_e_Y
     #
     def classify_model_adv_output_seg(self,Ypn, Y):
         #Y could be Ytrue or Ypred
-        valDice = MyDiceIndex(batch_dice=False)
+        #valDice = MyDiceIndex(batch_dice=False)
         Yp = Ypn[0]
         Y = Y[0]
-        dice=valDice(Yp, Y)
+        #dice=valDice(Yp, Y)
+        dice = super().getOnlineDice(Yp, Y)
         Ypn_e_Y=(dice>0.5)
         return Ypn_e_Y
     
@@ -486,7 +488,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
         
         if idx_n.shape[0]>0:
             temp=torch.norm((Xn-data[idx_n]).view(Xn.shape[0], -1), p=args.norm_type, dim=1).cpu()
-            E_new[idx[idx_n]]=torch.min(E_new[idx[idx_n]], temp)
+            #E_new[idx[idx_n]]=torch.min(E_new[idx[idx_n]], temp)
+            E_new[idx[idx_n]] = temp
         #--------------------
 
         if run_online_evaluation:

@@ -764,7 +764,33 @@ class nnUNetTrainer(NetworkTrainer):
         self.online_eval_fp = []
         self.online_eval_fn = []
         return global_dc_per_class
-        
+    
+    def getOnlineDice(self, output, target):
+        #output = output[0]
+        #target = target[0]
+        # within each batch
+        with torch.no_grad():
+            num_classes = output.shape[1]
+            output_softmax = softmax_helper(output)
+            output_seg = output_softmax.argmax(1)
+            target = target[:, 0]
+            axes = tuple(range(1, len(target.shape)))
+            tp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            fp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            fn_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            for c in range(1, num_classes):
+                tp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target == c).float(), axes=axes)
+                fp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target != c).float(), axes=axes)
+                fn_hard[:, c - 1] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
+
+            #tp_hard = tp_hard.detach().cpu().numpy()
+            #fp_hard = fp_hard.detach().cpu().numpy()
+            #fn_hard = fn_hard.detach().cpu().numpy()
+
+            batch_dice = (2 * tp_hard) / (2 * tp_hard + fp_hard + fn_hard + 1e-8)#batchsizex2       
+            
+            return batch_dice.mean(1)
+       
 
     def save_checkpoint(self, fname, save_optimizer=True):
         super(nnUNetTrainer, self).save_checkpoint(fname, save_optimizer)

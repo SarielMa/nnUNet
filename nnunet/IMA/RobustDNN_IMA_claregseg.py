@@ -324,7 +324,7 @@ def pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
         temp2=(B&A_old)&(advc<1)
         Xn2[temp1]=Xn[temp1].data
         Xn2[temp2]=Xn[temp2].data
-        advc[B]+=1
+        advc[B]+=1#
         #---------------------------
         if n < max_iter:
             #loss.backward() will update W.grad
@@ -527,7 +527,7 @@ def IMA_loss(model, X, Y, margin, norm_type, max_iter, step,
     if beta_position == 0:
         loss=(1-beta)*loss1+(beta*0.5)*(loss2+loss3)
     elif beta_position == 1:
-        loss=(1-beta)*(loss1+loss2)+beta*loss3
+        loss=(1-beta)*(loss1+loss2)+beta*loss3# almost the same as the vanilla PGD adv, diff: only add adv to part of the data
     elif beta_position == 2:
         loss=loss1+(1-beta)*loss2+beta*loss3
     elif beta_position == 3:
