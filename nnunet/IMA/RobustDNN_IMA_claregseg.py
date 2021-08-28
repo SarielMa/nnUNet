@@ -696,8 +696,8 @@ def IMA_update_margin(args, delta, max_margin, flag1, flag2, margin_new):
     no_expand=(flag1==0)&(flag2==1)
     args.E[expand]+=delta
     args.E[no_expand]=margin_new[no_expand]
-    #
-    args.E[flag2==0]=delta
+    #when wrongly classified, do not re-initialize
+    #args.E[flag2==0]=delta
     args.E.clamp_(min=delta, max=max_margin)
 #%%
 def IMA_estimate_margin(model, device, dataloader,

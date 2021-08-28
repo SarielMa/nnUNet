@@ -189,29 +189,36 @@ def main(noise, filename, taskid):
 
 
 if __name__ == "__main__":
-    noises = [0, 0.1,0.3,0.5]# for D2
+    #noises = [0, 40.0, 80.0, 120.0, 160.0, 200.0, 240.0, 280.0, 320.0]# L2 norm: for D5 (0.1 L2=45 and 0.1 L2=38)and D2 
+    noises = [0, 24.0, 30.0, 36.0]# L2 norm: for D4 (0.1 L2=6)
+    
     #noises = [0, 0.01, 0.05, 0.1]# for D2
     #noises = [0, 0.05]
     #noises = [0]
-    #nets = ["nnUnet", "PGD0.3","IMA0.3"]
-    nets = ["IMA0.3"]
-    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
+    #nets = ["nnUnet", "PGD0.3","IMA"]
+    nets = ["nnUnet", "PGD20", "IMA"]
+    nets = ["nnUnet"]
+    #dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
+    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
     selected = dataset[1]
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
     #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD/model_PGD_final_checkpoint.model","fold_0_IMA_0.3/model_IMA_final_checkpoint.model"]
-    folders = ["fold_0_IMA_1.0/model_IMA_final_checkpoint.model"]
+    folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD_20.0/model_PGD_final_checkpoint.model", "fold_0_IMA_max/model_IMA_final_checkpoint.model"]
+    #folders = ["fold_0_base/model_final_checkpoint.model"]
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111)
+    cols = ['b','r','g']
     yAxises = []
     for i, net in enumerate(nets):
         print ("++++++++++++++++++the net is ", net,"++++++++++++++++++++++++++++++")
         yAxises.append([main(noise, join(basePath, folders[i]), selected[4:7]) for noise in noises])
+        ax.plot(noises, yAxises[i], color=cols[i], label=nets[i])
 
-    ax.plot(noises, yAxises[0], color='b', label=nets[0])
+    
     #ax.plot(noises, yAxises[1], color='r', label=nets[1])
     #ax.plot(noises, yAxises[2], color='g', label=nets[2])
     ax.set_title(selected)
-    ax.set_xlabel("noise(Linf)")
+    ax.set_xlabel("noise(L2)")
     ax.set_ylabel("Avg Dice Index")
     ax.set_ylim(0,1)
     ax.legend()

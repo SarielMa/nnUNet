@@ -37,7 +37,7 @@ from abc import abstractmethod
 from datetime import datetime
 from tqdm import trange
 from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
-from nnunet.training.loss_functions.dice_loss import DiceIndex
+from nnunet.training.loss_functions.dice_loss import DiceIndex, SoftDiceLoss
 from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_update_margin
 import os.path
 
@@ -510,10 +510,10 @@ class NetworkTrainer(object):
         if isfile(join(self.output_folder, "model_latest.model.pkl")):
             os.remove(join(self.output_folder, "model_latest.model.pkl"))
 
-    class IMA_params:
+    class IMA_params_D2:# for D2 and D5
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 1.0
+            self.noise = 300.0
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
@@ -522,43 +522,81 @@ class NetworkTrainer(object):
             self.beta = 0.5
             self.beta_position =1
             self.E = 0
-            self.epoch_refine = 100
+            self.epoch_refine = 10
             self.delta = self.noise/self.epoch_refine
             self.model_eval_attack=0
             self.model_eval_Xn=0
             self.model_Xn_advc_p=0
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
-            self.pgd_replace_Y_with_Yp=0            
-
-    class IMA_params_large_step:
+            self.pgd_replace_Y_with_Yp=0   
+            
+    class IMA_params_D5:# for D2 and D5
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 0.3
-            self.norm_type = np.inf
-            self.alpha = 8
+            self.noise = 480.0
+            self.norm_type = 2
+            self.alpha = 4
             self.max_iter = 20
             self.stop = 1
             self.refine_Xn_max_iter = 10
             self.beta = 0.5
             self.beta_position =1
             self.E = 0
-            self.epoch_refine = 20
+            self.epoch_refine = 10
             self.delta = self.noise/self.epoch_refine
             self.model_eval_attack=0
             self.model_eval_Xn=0
             self.model_Xn_advc_p=0
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
-            self.pgd_replace_Y_with_Yp=0
+            self.pgd_replace_Y_with_Yp=0 
+
+    class IMA_params_D4:# for D4
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 60.0
+            self.norm_type = 2
+            self.alpha = 4
+            self.max_iter = 20
+            self.stop = 1
+            self.refine_Xn_max_iter = 10
+            self.beta = 0.5
+            self.beta_position =1
+            self.E = 0
+            self.epoch_refine = 10
+            self.delta = self.noise/self.epoch_refine
+            self.model_eval_attack=0
+            self.model_eval_Xn=0
+            self.model_Xn_advc_p=0
+            self.Xn1_equal_X =0
+            self.Xn2_equal_Xn =0
+            self.pgd_replace_Y_with_Yp=0 
+
+            
+    class PGD_params_D2:
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 300.0
+            self.norm_type = 2
+            self.max_iter = 20
+            self.step = self.noise/self.max_iter
+            
+    class PGD_params_D5:
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 480.0
+            self.norm_type = 2
+            self.max_iter = 20
+            self.step = self.noise/self.max_iter
             
     class PGD_params:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 0.3
+            self.noise = 30.0
             self.norm_type = 2
             self.max_iter = 20
-            self.step = 0.01
+            self.step = self.noise/self.max_iter
 
             
     def run_PGD_training(self):
@@ -1090,7 +1128,7 @@ class NetworkTrainer(object):
                 raise NotImplementedError("not implemented.")
         return x_grad
     
-    def pgd_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
+    def pgd_attack_old(self,model, X, Y, noise_norm, norm_type, max_iter, step,
                    rand_init=True, rand_init_norm=None, targeted=False,
                    clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
         #-----------------------------------------------------
@@ -1153,8 +1191,9 @@ class NetworkTrainer(object):
         ma = x.max()
         mi = x.min()
         x = (x-mi)/(ma-mi)
-        return x
-    def run_one_adv(self, data_dict, noise):
+        return x    
+    
+    def run_one_adv_old(self, data_dict, noise):
         self.network.eval()
         #data_dict = next(data_generator)
         data = data_dict['data']
@@ -1171,30 +1210,90 @@ class NetworkTrainer(object):
         if noise == 0:
             Xn = data
         else:
-            Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.01, use_optimizer=False, loss_fn=self.loss)
+            Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
         
         #ret = 0
         #valDice = DiceIndex()
         with torch.no_grad():
             output = self.network(Xn)
-            #Yp = self.maskIt(output[0])
-            #Y = self.maskIt(target[0])
-            #Yp = output[0]
-            #Y = target[0]
-            #l = valDice(Yp,Y) 
-            self.run_online_evaluation(output, target)
-            #l = self.my_finish_online_evaluation()  # does not have to do anything, but can be used to update self.all_val_eval_
-            # metrics
-            #self.my_plot_progress()           
-            
-        #l.backward()
-        """
-        if run_online_evaluation:
-            self.run_online_evaluation(output, target)
-        """
-        del target
+            self.run_online_evaluation(output, target)         
+        del target   
         
-        #return l.detach().cpu().numpy() #this is the result, not the one for backpropagation
+    def pgd_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
+                   rand_init=True, rand_init_norm=None, targeted=False,
+                   clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
+        #-----------------------------------------------------
+        # this attack focus on only the highest solution of Y and Yp
+        if loss_fn is None :
+            raise ValueError('loss_fn is unkown')
+        #-----------------
+        X = X.detach()
+        #-----------------
+        if rand_init == True:
+            init_norm=rand_init_norm
+            if rand_init_norm is None:
+                init_norm=noise_norm
+            noise_init=self.get_noise_init(norm_type, noise_norm, init_norm, X)
+            Xn = X + noise_init
+        else:
+            Xn = X.clone().detach() # must clone
+        #-----------------
+        noise_new=(Xn-X).detach()
+        if use_optimizer == True:
+            optimizer = optim.Adamax([noise_new], lr=step)
+        #-----------------
+        for n in range(0, max_iter):
+            Xn = Xn.detach()
+            Xn.requires_grad = True
+            Zn = model(Xn)
+            loss = loss_fn(Zn[0], Y[0])
+            #---------------------------
+            if targeted == True:
+                loss=-loss
+            #---------------------------
+            #loss.backward() will update W.grad
+            grad_n=torch.autograd.grad(loss, Xn)[0]
+            grad_n=self.normalize_grad_(grad_n, norm_type)
+            if use_optimizer == True:
+                noise_new.grad=-grad_n.detach() #grad ascent to maximize loss
+                optimizer.step()
+            else:
+                Xnew = Xn.detach() + step*grad_n.detach()
+                noise_new = Xnew-X
+            #---------------------
+            self.clip_norm_(noise_new, norm_type, noise_norm)
+            Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+            noise_new.data -= noise_new.data-(Xn-X).data
+            Xn=Xn.detach()
+        #---------------------------
+        return Xn
+    def run_one_adv(self, data_dict, noise):
+        # this use Dice as loss to attack
+        self.network.eval()
+        #data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']# target is a mask, but should have two...
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)# only the first target among the six is useful
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.optimizer.zero_grad()
+        Xn = 0
+        if noise == 0:
+            Xn = data
+        else:
+            valDice = SoftDiceLoss()
+            Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=valDice)
+        
+        #ret = 0
+        #valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            self.run_online_evaluation(output, target)         
+        del target
 #%% adversarial part   
     def run_validate_adv(self, noise):
         print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
@@ -1233,7 +1332,7 @@ class NetworkTrainer(object):
             print ("one batch is done")
             if data_dict['last']:
                 break
-            if counter ==3:
+            if counter ==4:
                 break
             counter +=1
 
