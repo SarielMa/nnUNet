@@ -513,7 +513,7 @@ class NetworkTrainer(object):
     class IMA_params_D2:# for D2 and D5
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 300.0
+            self.noise = 150.0
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
@@ -534,7 +534,7 @@ class NetworkTrainer(object):
     class IMA_params_D5:# for D2 and D5
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 480.0
+            self.noise = 240.0
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
@@ -552,10 +552,10 @@ class NetworkTrainer(object):
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
 
-    class IMA_params_D4:# for D4
+    class IMA_params:# for D4
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 60.0
+            self.noise = 120.0
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
@@ -577,7 +577,7 @@ class NetworkTrainer(object):
     class PGD_params_D2:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 300.0
+            self.noise = 150.0
             self.norm_type = 2
             self.max_iter = 20
             self.step = self.noise/self.max_iter
@@ -585,7 +585,7 @@ class NetworkTrainer(object):
     class PGD_params_D5:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 480.0
+            self.noise = 240.0
             self.norm_type = 2
             self.max_iter = 20
             self.step = self.noise/self.max_iter
@@ -593,7 +593,7 @@ class NetworkTrainer(object):
     class PGD_params:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 30.0
+            self.noise = 120.0
             self.norm_type = 2
             self.max_iter = 20
             self.step = self.noise/self.max_iter
@@ -1128,7 +1128,7 @@ class NetworkTrainer(object):
                 raise NotImplementedError("not implemented.")
         return x_grad
     
-    def pgd_attack_old(self,model, X, Y, noise_norm, norm_type, max_iter, step,
+    def pgd_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
                    rand_init=True, rand_init_norm=None, targeted=False,
                    clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
         #-----------------------------------------------------
@@ -1193,7 +1193,7 @@ class NetworkTrainer(object):
         x = (x-mi)/(ma-mi)
         return x    
     
-    def run_one_adv_old(self, data_dict, noise):
+    def run_one_adv(self, data_dict, noise):
         self.network.eval()
         #data_dict = next(data_generator)
         data = data_dict['data']
@@ -1219,7 +1219,7 @@ class NetworkTrainer(object):
             self.run_online_evaluation(output, target)         
         del target   
         
-    def pgd_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
+    def pgd_attack_2(self,model, X, Y, noise_norm, norm_type, max_iter, step,
                    rand_init=True, rand_init_norm=None, targeted=False,
                    clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
         #-----------------------------------------------------
@@ -1267,7 +1267,7 @@ class NetworkTrainer(object):
             Xn=Xn.detach()
         #---------------------------
         return Xn
-    def run_one_adv(self, data_dict, noise):
+    def run_one_adv_2(self, data_dict, noise):
         # this use Dice as loss to attack
         self.network.eval()
         #data_dict = next(data_generator)
@@ -1286,7 +1286,7 @@ class NetworkTrainer(object):
             Xn = data
         else:
             valDice = SoftDiceLoss()
-            Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=valDice)
+            Xn = self.pgd_attack_2(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=valDice)
         
         #ret = 0
         #valDice = DiceIndex()
@@ -1332,7 +1332,7 @@ class NetworkTrainer(object):
             print ("one batch is done")
             if data_dict['last']:
                 break
-            if counter ==4:
+            if counter ==5:
                 break
             counter +=1
 

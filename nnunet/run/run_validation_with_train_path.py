@@ -30,6 +30,7 @@ from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetT
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 import matplotlib.pyplot as plt
+import numpy as np
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -189,30 +190,42 @@ def main(noise, filename, taskid):
 
 
 if __name__ == "__main__":
-    #noises = [0, 40.0, 80.0, 120.0, 160.0, 200.0, 240.0, 280.0, 320.0]# L2 norm: for D5 (0.1 L2=45 and 0.1 L2=38)and D2 
-    noises = [0, 24.0, 30.0, 36.0]# L2 norm: for D4 (0.1 L2=6)
+    """
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"]="3"
+    """
+
+    noises = [0, 75, 150, 300]#D2
+    #noises = [0, 160, 240, 480]#D5    
+    #noises = [0, 15.0, 30.0, 60.0]# D4 (0.1 L2=6)
     
-    #noises = [0, 0.01, 0.05, 0.1]# for D2
-    #noises = [0, 0.05]
-    #noises = [0]
-    #nets = ["nnUnet", "PGD0.3","IMA"]
-    nets = ["nnUnet", "PGD20", "IMA"]
-    nets = ["nnUnet"]
-    #dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
+
+
+    nets = ["nnUnet", "PGD30", "IMA30"]#D4
+    #nets = ["nnUnet", "PGD240", "IMA240"]#D5
+    #nets = ["nnUnet", "PGD150", "IMA150"]#D5
+    
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
-    selected = dataset[1]
+    selected = dataset[0]
+    
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
-    #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD/model_PGD_final_checkpoint.model","fold_0_IMA_0.3/model_IMA_final_checkpoint.model"]
-    folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD_20.0/model_PGD_final_checkpoint.model", "fold_0_IMA_max/model_IMA_final_checkpoint.model"]
-    #folders = ["fold_0_base/model_final_checkpoint.model"]
+    #D4
+    #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD30/model_PGD_final_checkpoint.model", "fold_0_IMA30/model_IMA_final_checkpoint.model"]
+
+    #D5
+    #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD240/model_PGD_final_checkpoint.model", "fold_0_IMA240/model_IMA_final_checkpoint.model"]
+    
+    #D2
+    folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD150/model_PGD_final_checkpoint.model", "fold_0_IMA150/model_IMA_final_checkpoint.model"]
+    
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111)
-    cols = ['b','r','g']
+    cols = ['b','g','r','y','k','m','c']
     yAxises = []
     for i, net in enumerate(nets):
         print ("++++++++++++++++++the net is ", net,"++++++++++++++++++++++++++++++")
-        yAxises.append([main(noise, join(basePath, folders[i]), selected[4:7]) for noise in noises])
-        ax.plot(noises, yAxises[i], color=cols[i], label=nets[i])
+        yAxises = [main(noise, join(basePath, folders[i]), selected[4:7]) for noise in noises]
+        ax.plot(noises, yAxises, color=cols[i], label=nets[i])
 
     
     #ax.plot(noises, yAxises[1], color='r', label=nets[1])
@@ -221,7 +234,8 @@ if __name__ == "__main__":
     ax.set_xlabel("noise(L2)")
     ax.set_ylabel("Avg Dice Index")
     ax.set_ylim(0,1)
+    ax.set_yticks(np.arange(0, 1.05, step=0.05))
     ax.legend()
-    ax.grid()
+    ax.grid(True)
     fig.savefig("adv_result_"+selected+".png")
         
