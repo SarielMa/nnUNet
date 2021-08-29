@@ -552,10 +552,10 @@ class NetworkTrainer(object):
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
 
-    class IMA_params:# for D4
+    class IMA_params_D4:# for D4
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 120.0
+            self.noise = 240.0
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
@@ -580,7 +580,7 @@ class NetworkTrainer(object):
             self.noise = 150.0
             self.norm_type = 2
             self.max_iter = 20
-            self.step = self.noise/self.max_iter
+            self.step = 4*self.noise/self.max_iter
             
     class PGD_params_D5:
         def __init__(self):           
@@ -588,15 +588,15 @@ class NetworkTrainer(object):
             self.noise = 240.0
             self.norm_type = 2
             self.max_iter = 20
-            self.step = self.noise/self.max_iter
+            self.step = 4*self.noise/self.max_iter
             
     class PGD_params:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 120.0
+            self.noise = 60.0
             self.norm_type = 2
             self.max_iter = 20
-            self.step = self.noise/self.max_iter
+            self.step = 4*self.noise/self.max_iter
 
             
     def run_PGD_training(self):
@@ -1170,7 +1170,8 @@ class NetworkTrainer(object):
                 noise_new = Xnew-X
             #---------------------
             self.clip_norm_(noise_new, norm_type, noise_norm)
-            Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+            #Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+            Xn = X+noise_new
             noise_new.data -= noise_new.data-(Xn-X).data
             Xn=Xn.detach()
         #---------------------------

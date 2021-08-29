@@ -149,7 +149,8 @@ def pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
             noise_new = Xnew-X
         #---------------------
         clip_norm_(noise_new, norm_type, noise_norm)
-        Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+        #Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+        Xn = X + noise_new
         noise_new.data -= noise_new.data-(Xn-X).data
         Xn=Xn.detach()
     #---------------------------

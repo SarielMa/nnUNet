@@ -264,6 +264,7 @@ def classify_model_adv_output_seg(Ypn, Y):
     return Ypn_e_Y
 """
 #%%
+# this is in fact binary PGD attack
 def pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
                rand_init_norm=None, rand_init_Xn=None,
                targeted=False, clip_X_min=0, clip_X_max=1,
@@ -338,7 +339,8 @@ def pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
                 noise = Xnew-X
             #---------------------
             clip_norm_(noise, norm_type, noise_norm)
-            Xn = torch.clamp(X+noise, clip_X_min, clip_X_max)
+            #Xn = torch.clamp(X+noise, clip_X_min, clip_X_max)
+            Xn = X+noise
             noise.data -= noise.data-(Xn-X).data
             #---------------------
             Ypn_old_e_Y=Ypn_e_Y
