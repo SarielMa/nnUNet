@@ -637,7 +637,7 @@ class NetworkTrainer(object):
     class PGD_params:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 180.0
+            self.noise = 5
             self.norm_type = 2
             self.max_iter = 20
             self.step = 4*self.noise/self.max_iter

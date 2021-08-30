@@ -201,7 +201,7 @@ if __name__ == "__main__":
     
 
 
-    nets = ["nnUnet", "PGD120", "IMA120_5_5"]#D4
+    nets = ["nnUnet", "PGD5", "PGD10","PGD30","IMA10","IMA30"]#D4
     #nets = ["nnUnet", "PGD240", "IMA240","PGD160","IMA160"]#D5
     #nets = ["nnUnet", "PGD150", "IMA150"]#D5
     
@@ -211,8 +211,11 @@ if __name__ == "__main__":
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
     #D4
     folders = ["fold_0_base/model_final_checkpoint.model",
-               "fold_0_PGD120/model_PGD_final_checkpoint.model",
-               "fold_0_IMA120/model_IMA_final_checkpoint.model"]
+               "fold_0_PGD5/model_PGD5_final_checkpoint.model",
+               "fold_0_PGD10/model_PGD10_final_checkpoint.model",
+               "fold_0_PGD30/model_PGD30_final_checkpoint.model",
+               "fold_0_IMA10_3_3/model_IMA10_final_checkpoint.model",
+               "fold_0_IMA30_3_3/model_IMA30_final_checkpoint.model"]
 
     #D5
     """
