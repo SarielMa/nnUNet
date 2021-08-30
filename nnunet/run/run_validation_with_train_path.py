@@ -196,28 +196,31 @@ if __name__ == "__main__":
     """
 
     #noises = [0, 75, 150, 300]#D2
-    noises = [0, 160, 240, 320, 400, 480]#D5    
-    #noises = [0, 15.0, 30.0, 60.0]# D4 (0.1 L2=6)
+    #noises = [0, 160, 240, 320, 400, 480]#D5    
+    noises = [0,1,3,5,10]# D4 (0.1 L2=6)
     
 
 
-   # nets = ["nnUnet", "PGD30", "IMA30"]#D4
-    nets = ["nnUnet", "PGD240", "IMA240","PGD160","IMA160"]#D5
+    nets = ["nnUnet", "PGD120", "IMA120_5_5"]#D4
+    #nets = ["nnUnet", "PGD240", "IMA240","PGD160","IMA160"]#D5
     #nets = ["nnUnet", "PGD150", "IMA150"]#D5
     
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
-    selected = dataset[2]
+    selected = dataset[1]
     
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
     #D4
-    #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD30/model_PGD_final_checkpoint.model", "fold_0_IMA30/model_IMA_final_checkpoint.model"]
+    folders = ["fold_0_base/model_final_checkpoint.model",
+               "fold_0_PGD120/model_PGD_final_checkpoint.model",
+               "fold_0_IMA120/model_IMA_final_checkpoint.model"]
 
     #D5
+    """
     folders = ["fold_0_base/model_final_checkpoint.model",
                "fold_0_PGD240/model_PGD_final_checkpoint.model",
                "fold_0_IMA240/model_IMA_final_checkpoint.model",
                "fold_0_PGD160/model_PGD_final_checkpoint.model",
-               "fold_0_IMA160/model_IMA_final_checkpoint.model"]
+               "fold_0_IMA160/model_IMA_final_checkpoint.model"]"""
     
     #D2
     #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD150/model_PGD_final_checkpoint.model", "fold_0_IMA150/model_IMA_final_checkpoint.model"]

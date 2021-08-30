@@ -225,6 +225,45 @@ class NetworkTrainer(object):
             plt.close()
         except IOError:
             self.print_to_log_file("failed to plot: ", sys.exc_info())
+            
+            
+    def my_plot_progress(self,args):
+        """
+        Should probably by improved
+        :return:
+        """
+        title = args.title+str(args.noise)+"_"
+        try:
+            font = {'weight': 'normal',
+                    'size': 18}
+
+            matplotlib.rc('font', **font)
+
+            fig = plt.figure(figsize=(30, 24))
+            ax = fig.add_subplot(111)
+            ax2 = ax.twinx()
+
+            x_values = list(range(self.epoch + 1))
+
+            ax.plot(x_values, self.all_tr_losses, color='b', ls='-', label="loss_tr")
+
+            ax.plot(x_values, self.all_val_losses, color='r', ls='-', label="loss_val, train=False")
+
+            if len(self.all_val_losses_tr_mode) > 0:
+                ax.plot(x_values, self.all_val_losses_tr_mode, color='g', ls='-', label="loss_val, train=True")
+            if len(self.all_val_eval_metrics) == len(x_values):
+                ax2.plot(x_values, self.all_val_eval_metrics, color='g', ls='--', label="evaluation metric")
+
+            ax.set_xlabel("epoch")
+            ax.set_ylabel("loss")
+            ax2.set_ylabel("evaluation metric")
+            ax.legend()
+            ax2.legend(loc=9)
+
+            fig.savefig(join(self.output_folder, title+"progress.png"))
+            plt.close()
+        except IOError:
+            self.print_to_log_file("failed to plot: ", sys.exc_info())
 
     def print_to_log_file(self, *args, also_print_to_console=True, add_timestamp=True):
 
@@ -433,7 +472,7 @@ class NetworkTrainer(object):
         self._maybe_init_amp()
 
         maybe_mkdir_p(self.output_folder)        
-        self.plot_network_architecture()
+        #self.plot_network_architecture()
 
         if cudnn.benchmark and cudnn.deterministic:
             warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
@@ -530,6 +569,7 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0   
+            self.title = "IMA"
             
     class IMA_params_D5:# for D2 and D5
         def __init__(self):           
@@ -551,6 +591,7 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
+            self.title = "IMA"
 
     class IMA_params_D4:# for D4
         def __init__(self):           
@@ -572,6 +613,7 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
+            self.title = "IMA"
 
             
     class PGD_params_D2:
@@ -581,6 +623,7 @@ class NetworkTrainer(object):
             self.norm_type = 2
             self.max_iter = 20
             self.step = 4*self.noise/self.max_iter
+            self.title = "PGD"
             
     class PGD_params_D5:
         def __init__(self):           
@@ -589,14 +632,16 @@ class NetworkTrainer(object):
             self.norm_type = 2
             self.max_iter = 20
             self.step = 4*self.noise/self.max_iter
+            self.title = "PGD"
             
     class PGD_params:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 60.0
+            self.noise = 180.0
             self.norm_type = 2
             self.max_iter = 20
             self.step = 4*self.noise/self.max_iter
+            self.title = "PGD"
 
             
     def run_PGD_training(self):
@@ -612,7 +657,7 @@ class NetworkTrainer(object):
         self._maybe_init_amp()
 
         maybe_mkdir_p(self.output_folder)        
-        self.plot_network_architecture()
+        #self.plot_network_architecture()
 
         # config IMA parameters
         #######################################################################################
@@ -672,7 +717,7 @@ class NetworkTrainer(object):
 
             self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
 
-            continue_training = self.on_epoch_end()
+            continue_training = self.my_on_epoch_end(args)
 
             epoch_end_time = time()
 
@@ -685,7 +730,7 @@ class NetworkTrainer(object):
 
         self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
 
-        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_PGD_final_checkpoint.model"))
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_PGD"+str(args.noise)+"_final_checkpoint.model"))
         # now we can delete latest as it will be identical with final
         if isfile(join(self.output_folder, "model_PGD_latest.model")):
             os.remove(join(self.output_folder, "model_PGD_latest.model"))
@@ -697,7 +742,7 @@ class NetworkTrainer(object):
         ax.hist(E.cpu().numpy(), bins=100, range=(0, noise))
         #display.display(fig)
         if filename is not None:
-            fig.savefig(filename+'.png')
+            fig.savefig(filename+str(noise)+'.png')
         plt.close(fig)     
         
     def run_IMA_training(self, counter):
@@ -713,7 +758,7 @@ class NetworkTrainer(object):
         self._maybe_init_amp()
 
         maybe_mkdir_p(self.output_folder)        
-        self.plot_network_architecture()
+        #self.plot_network_architecture()
 
         # config IMA parameters
         #######################################################################################
@@ -780,7 +825,7 @@ class NetworkTrainer(object):
 
             self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
 
-            continue_training = self.on_epoch_end()
+            continue_training = self.my_on_epoch_end(args)
 
             epoch_end_time = time()
 
@@ -793,7 +838,7 @@ class NetworkTrainer(object):
 
         self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
 
-        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_IMA_final_checkpoint.model"))
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_IMA"+str(args.noise)+"_final_checkpoint.model"))
         # now we can delete latest as it will be identical with final
         if isfile(join(self.output_folder, "model_IMA_latest.model")):
             os.remove(join(self.output_folder, "model_IMA_latest.model"))
@@ -824,6 +869,19 @@ class NetworkTrainer(object):
             if not self.save_latest_only:
                 self.save_checkpoint(join(self.output_folder, "model_ep_%03.0d.model" % (self.epoch + 1)))
             self.save_checkpoint(join(self.output_folder, "model_latest.model"))
+            self.print_to_log_file("done")
+            
+    def my_maybe_save_checkpoint(self, args):
+        """
+        Saves a checkpoint every save_ever epochs.
+        :return:
+        """
+        title = args.title+str(args.noise)+"_"
+        if self.save_intermediate_checkpoints and (self.epoch % self.save_every == (self.save_every - 1)):
+            self.print_to_log_file("my saving scheduled checkpoint file...")
+            if not self.save_latest_only:
+                self.save_checkpoint(join(self.output_folder, title+"model_ep_%03.0d.model" % (self.epoch + 1)))
+            self.save_checkpoint(join(self.output_folder, title+"model_latest.model"))
             self.print_to_log_file("done")
 
     def update_eval_criterion_MA(self):
@@ -912,6 +970,21 @@ class NetworkTrainer(object):
         self.maybe_update_lr()
 
         self.maybe_save_checkpoint()
+
+        self.update_eval_criterion_MA()
+
+        continue_training = self.manage_patience()
+        return continue_training
+    
+    def my_on_epoch_end(self, args):
+        self.finish_online_evaluation()  # does not have to do anything, but can be used to update self.all_val_eval_
+        # metrics
+
+        self.my_plot_progress(args)
+
+        self.maybe_update_lr()
+
+        self.my_maybe_save_checkpoint(args)
 
         self.update_eval_criterion_MA()
 
@@ -1311,7 +1384,7 @@ class NetworkTrainer(object):
         self._maybe_init_amp()
 
       
-        self.plot_network_architecture()
+        #self.plot_network_architecture()
 
         if cudnn.benchmark and cudnn.deterministic:
             warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
@@ -1333,7 +1406,7 @@ class NetworkTrainer(object):
             print ("one batch is done")
             if data_dict['last']:
                 break
-            if counter ==5:
+            if counter ==3:
                 break
             counter +=1
 
