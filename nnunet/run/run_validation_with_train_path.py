@@ -194,29 +194,32 @@ if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"]="3"
     """
+    import random
+    random.seed(10)
 
     #noises = [0, 75, 150, 300]#D2
-    #noises = [0, 160, 240, 320, 400, 480]#D5    
-    noises = [0,1,3,5,10]# D4 (0.1 L2=6)
+    noises = [0, 25, 50, 75]#D5    
+    #noises = [0,1,5,10,20,30]# D4 (0.1 L2=6)
     
 
 
-    nets = ["nnUnet", "IMA10", "PGD10", "IMA30", "PGD30", "PGD5"]#D4
+    #nets = ["nnUnet", "IMA30(02)","IMA30(03)","PGD10","PGD30","PGD1"]#D4
     #nets = ["nnUnet", "PGD240", "IMA240","PGD160","IMA160"]#D5
-    #nets = ["nnUnet", "PGD150", "IMA150"]#D5
+    nets = ["nnUnet"]#D5
     
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
-    selected = dataset[1]
+    selected = dataset[0]
     
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
     #D4
+    
     folders = ["fold_0_base/model_final_checkpoint.model",
-               "fold_0_IMA10_3_3/model_IMA10_final_checkpoint.model",
+               "fold_0_IMA30_0_2/model_IMA_0_2_30_final_checkpoint.model",
+               "fold_0_IMA30_0_3/model_IMA_0_3_30_final_checkpoint.model",
                "fold_0_PGD10/model_PGD10_final_checkpoint.model",
-               "fold_0_IMA30_3_3/model_IMA30_final_checkpoint.model",
                "fold_0_PGD30/model_PGD30_final_checkpoint.model",
-               "fold_0_PGD5/model_PGD5_final_checkpoint.model"]
-
+               "fold_0_PGD1/model_PGD1_final_checkpoint.model"]
+    
     #D5
     """
     folders = ["fold_0_base/model_final_checkpoint.model",

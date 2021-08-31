@@ -321,10 +321,10 @@ def pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
             loss=-loss
         #---------------------------
         temp1=(A&A_old)&(advc<1)
-        Xn1[temp1]=Xn[temp1].data
+        Xn1[temp1]=Xn[temp1].data# last right and this right
         temp2=(B&A_old)&(advc<1)
-        Xn2[temp1]=Xn[temp1].data
-        Xn2[temp2]=Xn[temp2].data
+        Xn2[temp1]=Xn[temp1].data# last right and this right
+        Xn2[temp2]=Xn[temp2].data# last right and this wrong
         advc[B]+=1#
         #---------------------------
         if n < max_iter:

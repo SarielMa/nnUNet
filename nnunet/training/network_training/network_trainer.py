@@ -38,6 +38,7 @@ from datetime import datetime
 from tqdm import trange
 from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
 from nnunet.training.loss_functions.dice_loss import DiceIndex, SoftDiceLoss
+from nnunet.utilities.nd_softmax import softmax_helper
 from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_update_margin
 import os.path
 
@@ -593,10 +594,10 @@ class NetworkTrainer(object):
             self.pgd_replace_Y_with_Yp=0 
             self.title = "IMA"
 
-    class IMA_params_D4:# for D4
+    class IMA_params:# for D4
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 240.0
+            self.noise = 30
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
@@ -605,7 +606,7 @@ class NetworkTrainer(object):
             self.beta = 0.5
             self.beta_position =1
             self.E = 0
-            self.epoch_refine = 10
+            self.epoch_refine = 25
             self.delta = self.noise/self.epoch_refine
             self.model_eval_attack=0
             self.model_eval_Xn=0
@@ -613,7 +614,7 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
-            self.title = "IMA"
+            self.title = "IMA_0_0s_"
 
             
     class PGD_params_D2:
@@ -634,7 +635,7 @@ class NetworkTrainer(object):
             self.step = 4*self.noise/self.max_iter
             self.title = "PGD"
             
-    class PGD_params:
+    class PGD_params_D4:
         def __init__(self):           
             #used to pass parameters to ima iteration
             self.noise = 5
@@ -764,6 +765,7 @@ class NetworkTrainer(object):
         #######################################################################################
         args = self.IMA_params()
         args.E=args.delta*torch.ones(counter, dtype=torch.float32)
+        title = args.title+str(args.noise)
         #E_new=args.E.detach().clone()
         #######################################################################################
 
@@ -796,7 +798,7 @@ class NetworkTrainer(object):
             #------update the margin
             IMA_update_margin(args, args.delta, args.noise, flag1, flag2, E_new)
             print('IMA_update_margin: done, margin updated')    
-            self.plot_E(args.E, args.noise,join(self.output_folder, 'histE'))           
+            self.plot_E(args.E, args.noise,join(self.output_folder, title+'histE'))           
             
             #------
             
@@ -838,7 +840,7 @@ class NetworkTrainer(object):
 
         self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
 
-        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_IMA"+str(args.noise)+"_final_checkpoint.model"))
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_"+title+"_final_checkpoint.model"))
         # now we can delete latest as it will be identical with final
         if isfile(join(self.output_folder, "model_IMA_latest.model")):
             os.remove(join(self.output_folder, "model_IMA_latest.model"))
@@ -1336,12 +1338,13 @@ class NetworkTrainer(object):
                 noise_new = Xnew-X
             #---------------------
             self.clip_norm_(noise_new, norm_type, noise_norm)
-            Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+            #Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+            Xn = X + noise_new
             noise_new.data -= noise_new.data-(Xn-X).data
             Xn=Xn.detach()
         #---------------------------
         return Xn
-    def run_one_adv_2(self, data_dict, noise):
+    def run_one_adv2(self, data_dict, noise):
         # this use Dice as loss to attack
         self.network.eval()
         #data_dict = next(data_generator)
@@ -1359,7 +1362,7 @@ class NetworkTrainer(object):
         if noise == 0:
             Xn = data
         else:
-            valDice = SoftDiceLoss()
+            valDice = SoftDiceLoss(apply_nonlin=softmax_helper)
             Xn = self.pgd_attack_2(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=valDice)
         
         #ret = 0
@@ -1402,7 +1405,7 @@ class NetworkTrainer(object):
         #counter = 0
         #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
         for data_dict in self.ts_gen:
-            self.run_one_adv(data_dict, noise)
+            self.run_one_adv2(data_dict, noise)
             print ("one batch is done")
             if data_dict['last']:
                 break

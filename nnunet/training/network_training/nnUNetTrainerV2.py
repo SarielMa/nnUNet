@@ -318,7 +318,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Y = Y[0]
         #dice=valDice(Yp, Y)
         dice = super().getOnlineDice(Yp, Y)
-        Yp_e_Y=(dice>0.5)
+        Yp_e_Y=(dice>=0)
         return Yp_e_Y
     #
     def classify_model_adv_output_seg(self,Ypn, Y):
@@ -328,7 +328,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Y = Y[0]
         #dice=valDice(Yp, Y)
         dice = super().getOnlineDice(Yp, Y)
-        Ypn_e_Y=(dice>0.7)
+        Ypn_e_Y=(dice>0)
         return Ypn_e_Y
     
     def run_model_std_seg(self, model, X, Y=None, return_loss=False, reduction='none'):
