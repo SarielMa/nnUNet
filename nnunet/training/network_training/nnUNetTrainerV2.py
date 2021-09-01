@@ -52,7 +52,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
                  unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
                          deterministic, fp16)
-        self.max_num_epochs =100
+        self.max_num_epochs =50
         self.initial_lr = 1e-2
         self.deep_supervision_scales = None
         self.ds_loss_weights = None
@@ -317,7 +317,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Yp = Yp[0]
         Y = Y[0]
         #dice=valDice(Yp, Y)
-        dice = super().getOnlineDice(Yp, Y)
+        dice = super().getOnlineDiceMax(Yp, Y)
         Yp_e_Y=(dice>=0)
         return Yp_e_Y
     #
@@ -327,8 +327,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Yp = Ypn[0]
         Y = Y[0]
         #dice=valDice(Yp, Y)
-        dice = super().getOnlineDice(Yp, Y)
-        Ypn_e_Y=(dice>0)
+        dice = super().getOnlineDiceMax(Yp, Y)
+        Ypn_e_Y=(dice>0.75)
         return Ypn_e_Y
     
     def run_model_std_seg(self, model, X, Y=None, return_loss=False, reduction='none'):
@@ -480,8 +480,9 @@ class nnUNetTrainerV2(nnUNetTrainer):
         
         if idx_n.shape[0]>0:
             temp=torch.norm((Xn-data[idx_n]).view(Xn.shape[0], -1), p=args.norm_type, dim=1).cpu()
-            #E_new[idx[idx_n]]=torch.min(E_new[idx[idx_n]], temp)            
-            E_new[idx[idx_n]] = (E_new[idx[idx_n]]+ temp)/2# use mean to refine the margin to reduce the effect of augmentation on margins
+            #E_new[idx[idx_n]]=torch.min(E_new[idx[idx_n]], temp)     
+            #bottom = args.delta*torch.ones(E_new.size(0), dtype=E_new.dtype, device=E_new.device)
+            E_new[idx[idx_n]] = (E_new[idx[idx_n]]+temp)/2# use mean to refine the margin to reduce the effect of augmentation on margins
         #--------------------
 
         if run_online_evaluation:

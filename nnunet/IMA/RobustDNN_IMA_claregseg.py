@@ -471,6 +471,7 @@ def IMA_loss(model, X, Y, margin, norm_type, max_iter, step,
     Ypn=torch.tensor([], dtype=Y[0].dtype, device=X.device)
     advc=torch.zeros(X.size(0), dtype=torch.int64, device=X.device)
     idx_n=torch.tensor([], dtype=torch.int64, device=X.device)
+
     #----------------------------------
     if Yp_ne_Y.sum().item()>0:
         loss1 = loss_X[Yp_ne_Y].sum()/X.size(0)
@@ -519,13 +520,21 @@ def IMA_loss(model, X, Y, margin, norm_type, max_iter, step,
         if model_Xn_advc_p == True:
             idx_n=torch.arange(0,X.size(0))[(advc>0)&(Yp_e_Y)]                
         else:
-            idx_n=torch.arange(0,X.size(0))[Yp_e_Y]# in this case, advc is useless. focusing on this is OK
+            idx_n=torch.arange(0,X.size(0))[Yp_e_Y]# for those margin=0, they are not adversarial samples, should not be here
         # to be consistant with the output of IMA_loss in RobustDNN_IMA
         Xn=Xn[idx_n] 
         #Ypn=Ypn[idx_n]
         if idx_n.size(0)>0:   
-            loss3 = loss_Xn[idx_n].sum()/X.size(0)
+            loss3 = loss_Xn[idx_n].sum()/Xn.size(0)
     #--------------------------------------------
+    #tuning the beta based on the proportion of the adversarial samples
+    """
+    nAdvSamples = ((Yp_e_Y)&(margin>args.delta)).sum().item()
+    nCleanSamples = X.size(0)
+    beta = beta/((nAdvSamples+1e8)/(nCleanSamples+1e8))#expand the beta as required
+    beta = beta/(0.5+beta)
+    """
+    #-----------------------------------------
     if beta_position == 0:
         loss=(1-beta)*loss1+(beta*0.5)*(loss2+loss3)
     elif beta_position == 1:
@@ -687,7 +696,7 @@ def IMA_update_margin_OLD(margin, delta, max_margin, flag1, flag2, margin_new):
     margin[no_expand]=margin_new[no_expand]
     #
     margin[flag2==0]=delta
-    margin.clamp_(min=delta, max=max_margin)
+    margin.clamp_(min=0, max=max_margin)
     
 def IMA_update_margin(args, delta, max_margin, flag1, flag2, margin_new):
     # margin: to be updated
@@ -700,7 +709,7 @@ def IMA_update_margin(args, delta, max_margin, flag1, flag2, margin_new):
     args.E[no_expand]=margin_new[no_expand]
     #when wrongly classified, do not re-initialize
     #args.E[flag2==0]=delta
-    args.E.clamp_(min=delta, max=max_margin)
+    args.E.clamp_(min=0, max=max_margin)
 #%%
 def IMA_estimate_margin(model, device, dataloader,
                         margin_level, norm_type, max_iter, step,

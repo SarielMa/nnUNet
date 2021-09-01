@@ -765,7 +765,33 @@ class nnUNetTrainer(NetworkTrainer):
         self.online_eval_fn = []
         return global_dc_per_class
     
-    def getOnlineDice(self, output, target):
+    def getOnlineDiceMax(self, output, target):
+        #output = output[0]
+        #target = target[0]
+        # within each batch
+        with torch.no_grad():
+            num_classes = output.shape[1]
+            output_softmax = softmax_helper(output)
+            output_seg = output_softmax.argmax(1)
+            target = target[:, 0]
+            axes = tuple(range(1, len(target.shape)))
+            tp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            fp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            fn_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            for c in range(1, num_classes):
+                tp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target == c).float(), axes=axes)
+                fp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target != c).float(), axes=axes)
+                fn_hard[:, c - 1] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
+
+            #tp_hard = tp_hard.detach().cpu().numpy()
+            #fp_hard = fp_hard.detach().cpu().numpy()
+            #fn_hard = fn_hard.detach().cpu().numpy()
+
+            batch_dice = (2 * tp_hard) / (2 * tp_hard + fp_hard + fn_hard + 1e-8)#batchsizex2       
+            
+            return (batch_dice.max(1).values)
+       
+    def getOnlineDiceMean(self, output, target):
         #output = output[0]
         #target = target[0]
         # within each batch
@@ -790,8 +816,44 @@ class nnUNetTrainer(NetworkTrainer):
             batch_dice = (2 * tp_hard) / (2 * tp_hard + fp_hard + fn_hard + 1e-8)#batchsizex2       
             
             return batch_dice.mean(1)
-       
+        
+    def getOnlineDiceMeanOnlyDoubleClass(self, output, target):
+        #output = output[0]
+        #target = target[0]
+        # within each batch
+        with torch.no_grad():
+            num_classes = output.shape[1]
+            output_softmax = softmax_helper(output)
+            output_seg = output_softmax.argmax(1)
+            target = target[:, 0]
+            axes = tuple(range(1, len(target.shape)))
+            tp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            fp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            fn_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            for c in range(1, num_classes):
+                tp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target == c).float(), axes=axes)
+                fp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target != c).float(), axes=axes)
+                fn_hard[:, c - 1] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
 
+            #tp_hard = tp_hard.detach().cpu().numpy()
+            #fp_hard = fp_hard.detach().cpu().numpy()
+            #fn_hard = fn_hard.detach().cpu().numpy()
+
+            batch_dice = (2 * tp_hard) / (2 * tp_hard + fp_hard + fn_hard + 1e-8)#batchsizex2  
+            if num_classes >3:
+                raise ValueError('evaluation only support dataset with one or two classes')
+            elif num_classes ==3:#two classes             
+                bd1 = batch_dice[:,0]
+                bd2 = batch_dice[:,1]
+                batch_dice = batch_dice[(bd1>0)&(bd2>0)]
+                
+            else:
+                #only one class
+                bd1 = batch_dice[:,0]
+                batch_dice = batch_dice[bd1>0]
+            
+            return batch_dice.mean(1)
+        
     def save_checkpoint(self, fname, save_optimizer=True):
         super(nnUNetTrainer, self).save_checkpoint(fname, save_optimizer)
         info = OrderedDict()

@@ -42,6 +42,7 @@ from nnunet.utilities.nd_softmax import softmax_helper
 from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_update_margin
 import os.path
 
+
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
 
@@ -597,16 +598,16 @@ class NetworkTrainer(object):
     class IMA_params:# for D4
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 30
+            self.noise = 5
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
             self.stop = 1
             self.refine_Xn_max_iter = 10
-            self.beta = 0.5
+            self.beta = 0.5#1/6 for thre = 0.5
             self.beta_position =1
             self.E = 0
-            self.epoch_refine = 25
+            self.epoch_refine = 10
             self.delta = self.noise/self.epoch_refine
             self.model_eval_attack=0
             self.model_eval_Xn=0
@@ -614,7 +615,7 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
-            self.title = "IMA_0_0s_"
+            self.title = "IMA_075_"
 
             
     class PGD_params_D2:
@@ -1288,12 +1289,14 @@ class NetworkTrainer(object):
         else:
             Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
         
-        #ret = 0
+        ret = 0
         #valDice = DiceIndex()
         with torch.no_grad():
             output = self.network(Xn)
+            ret = self.getOnlineDiceMeanOnlyDoubleClass(output[0], target[0])
             self.run_online_evaluation(output, target)         
         del target   
+        return ret.cpu().numpy()
         
     def pgd_attack_2(self,model, X, Y, noise_norm, norm_type, max_iter, step,
                    rand_init=True, rand_init_norm=None, targeted=False,
@@ -1404,8 +1407,9 @@ class NetworkTrainer(object):
         #val_losses = []
         #counter = 0
         #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
+        avg = []
         for data_dict in self.ts_gen:
-            self.run_one_adv2(data_dict, noise)
+            avg.append(self.run_one_adv(data_dict, noise))
             print ("one batch is done")
             if data_dict['last']:
                 break
@@ -1414,13 +1418,15 @@ class NetworkTrainer(object):
             counter +=1
 
         ret = self.my_finish_online_evaluation()
-        #self.all_val_losses.append(np.mean(val_losses))
+        
+        avg = np.concatenate(avg)
+        ret2 = avg.mean()
         validationDice = np.mean(ret)
         self.print_to_log_file("av global foreground dice: ", ret)
         self.print_to_log_file("validation dice: %.4f" % validationDice)
         epoch_end_time = time()
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
-        return validationDice
+        return validationDice, ret2
 
 
 

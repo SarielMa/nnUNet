@@ -197,58 +197,75 @@ if __name__ == "__main__":
     import random
     random.seed(10)
 
-    #noises = [0, 75, 150, 300]#D2
-    noises = [0, 25, 50, 75]#D5    
-    #noises = [0,1,5,10,20,30]# D4 (0.1 L2=6)
+    #noises = [0, 5,15,25]#D2
+    #noises = [0, 10,25,40]#D5    
+    noises = [0,1,3,5,10]# D4 (0.1 L2=6)
     
 
 
-    #nets = ["nnUnet", "IMA30(02)","IMA30(03)","PGD10","PGD30","PGD1"]#D4
+    #nets = ["nnUnet", "IMA10(00)","IMA10(01)","PGD10","PGD30","PGD1"]#D4
+    nets = ["IMA5(05)","nnUnet"]#D4
     #nets = ["nnUnet", "PGD240", "IMA240","PGD160","IMA160"]#D5
-    nets = ["nnUnet"]#D5
+    #nets = ["nnUnet", "PGD50"]#D5
     
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
-    selected = dataset[0]
+    selected = dataset[1]
     
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
     #D4
     
+    folders = ["fold_0_IMA_05_5/model_IMA_05_5_final_checkpoint.model",
+               "fold_0_base/model_final_checkpoint.model"]
+    
+    """
     folders = ["fold_0_base/model_final_checkpoint.model",
                "fold_0_IMA30_0_2/model_IMA_0_2_30_final_checkpoint.model",
                "fold_0_IMA30_0_3/model_IMA_0_3_30_final_checkpoint.model",
                "fold_0_PGD10/model_PGD10_final_checkpoint.model",
                "fold_0_PGD30/model_PGD30_final_checkpoint.model",
                "fold_0_PGD1/model_PGD1_final_checkpoint.model"]
-    
+    """
     #D5
     """
     folders = ["fold_0_base/model_final_checkpoint.model",
-               "fold_0_PGD240/model_PGD_final_checkpoint.model",
-               "fold_0_IMA240/model_IMA_final_checkpoint.model",
-               "fold_0_PGD160/model_PGD_final_checkpoint.model",
-               "fold_0_IMA160/model_IMA_final_checkpoint.model"]"""
-    
+               "fold_0_PGD50/model_PGD50_final_checkpoint.model"]
+    """
     #D2
     #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD150/model_PGD_final_checkpoint.model", "fold_0_IMA150/model_IMA_final_checkpoint.model"]
     
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111)
+    fig2 = plt.figure(figsize=(10, 8))
+    ax2 = fig.add_subplot(111)    
     cols = ['b','g','r','y','k','m','c']
     yAxises = []
+    yAxises2 = []
     for i, net in enumerate(nets):
         print ("++++++++++++++++++the net is ", net,"++++++++++++++++++++++++++++++")
-        yAxises = [main(noise, join(basePath, folders[i]), selected[4:7]) for noise in noises]
+        for noise in noises:
+            vixelDice,avgDice = main(noise, join(basePath, folders[i]), selected[4:7]) 
+            yAxises.append(vixelDice)
+            yAxises2.append(avgDice)
         ax.plot(noises, yAxises, color=cols[i], label=nets[i])
+        ax2.plot(noises, yAxises2, color=cols[i], label=nets[i])
 
     
     #ax.plot(noises, yAxises[1], color='r', label=nets[1])
     #ax.plot(noises, yAxises[2], color='g', label=nets[2])
     ax.set_title(selected)
     ax.set_xlabel("noise(L2)")
-    ax.set_ylabel("Avg Dice Index")
+    ax.set_ylabel("total Vixel Dice Index")
     ax.set_ylim(0,1)
     ax.set_yticks(np.arange(0, 1.05, step=0.05))
     ax.legend()
     ax.grid(True)
-    fig.savefig("adv_result_"+selected+".png")
-        
+    fig.savefig("advVixelDice_result_"+selected+".png")
+
+    ax2.set_title(selected)
+    ax2.set_xlabel("noise(L2)")
+    ax2.set_ylabel("Pair Dice Index(only with all classes)")
+    ax2.set_ylim(0,1)
+    ax2.set_yticks(np.arange(0, 1.05, step=0.05))
+    ax2.legend()
+    ax2.grid(True)
+    fig2.savefig("advPairDice_result_"+selected+".png")        
