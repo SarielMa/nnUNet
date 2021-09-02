@@ -704,6 +704,11 @@ class MyDataLoader2D(SlimDataLoaderBase):
             
         case_all_data = case_all_data[:, slice_id]      
         self.current_slice += 1
+        
+        # check if this slice has all classes
+        
+        #=========================================
+        
         if self.current_slice >= self.counter:
             self.current_slice = self.current_slice % self.counter
             self.lastBatch = True

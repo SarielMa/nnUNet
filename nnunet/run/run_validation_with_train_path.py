@@ -198,26 +198,28 @@ if __name__ == "__main__":
     random.seed(10)
 
 
-    choice = 0
+    choice = 3
     #dataset name
-    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
+    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
     selected = dataset[choice]
     # noise name
     noiseDict =[[0, 5,15,25],#D2
                 [0,1,3,5,10],#D4 
-                [0, 10,25,40]]#D5 
+                [0, 10,25,40],#D5
+                [0,10,20,30,40]]#D9 
     noises = noiseDict[choice]
     #methods names
     netDict = [["IMA25(070)","IMA25(080)", "PGD25","PGD5","nnUnet"],#D2
-                ["IMA5(070)","IMA5(050)","PGD5","PGD1","nnUnet"],#D4
-                ["IMA40(070)_delta0.1","IMA40(070)","PGD40","PGD10","nnUnet"]#D5
+                ["IMA5(030)","IMA5(050)","PGD5","PGD1","nnUnet"],#D4
+                ["IMA40(070)_delta0.1","IMA40(070)","PGD40","PGD20","PGD10","nnUnet"],#D5
+                ["nnUnet"]#D9
                 ]
         
     nets = netDict[choice]
     #
     folderDict = []
     #D4   
-    folders4 = ["fold_0_IMA_070_5/model_IMA_070_5_final_checkpoint.model",
+    folders4 = ["fold_0_IMA_030_5/model_IMA_030_5_final_checkpoint.model",
                 "fold_0_IMA_050_5/model_IMA_050_5_final_checkpoint.model",
                "fold_0_PGD5/model_PGD5_final_checkpoint.model",
                "fold_0_PGD1/model_PGD1_final_checkpoint.model",
@@ -226,6 +228,7 @@ if __name__ == "__main__":
     folders5 = ["fold_0_IMA_070_40_old_but_good/model_IMA_070_40_final_checkpoint.model",
                 "fold_0_IMA_070_40/model_IMA_070_40_final_checkpoint.model",
                "fold_0_PGD40/model_PGD40_final_checkpoint.model",
+               "fold_0_PGD20/model_PGD20_final_checkpoint.model",
                "fold_0_PGD10/model_PGD10_final_checkpoint.model",
                "fold_0_base/model_final_checkpoint.model"]  
     #D2
@@ -234,9 +237,13 @@ if __name__ == "__main__":
                "fold_0_PGD25/model_PGD25_final_checkpoint.model",
                "fold_0_PGD5/model_PGD5_final_checkpoint.model",
                "fold_0_base/model_final_checkpoint.model"]
+    
+    #D9
+    folders9 = [ "fold_0_base/model_final_checkpoint.model"]
     folderDict.append(folders2)
     folderDict.append(folders4)
     folderDict.append(folders5)
+    folderDict.append(folders9)
     folders = folderDict[choice]
 
     

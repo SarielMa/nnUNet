@@ -598,7 +598,7 @@ class NetworkTrainer(object):
     class IMA_params:# for D4
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 10
+            self.noise = 5
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
@@ -615,7 +615,7 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
-            self.title = "IMA_08_"
+            self.title = "IMA_03_"
 
             
     class PGD_params_D2:
@@ -1409,6 +1409,13 @@ class NetworkTrainer(object):
         #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
         avg = []
         for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue
+            
+            #finishe check
             avg.append(self.run_one_adv(data_dict, noise))
             print ("one batch is done")
             if data_dict['last']:

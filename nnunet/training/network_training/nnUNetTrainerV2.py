@@ -340,7 +340,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Y = Y[0]
         #dice=valDice(Yp, Y)
         dice = super().getOnlineDiceMax(Yp, Y)
-        Ypn_e_Y=(dice>0.8)
+        Ypn_e_Y=(dice>=0.3)
         return Ypn_e_Y
     
     def run_model_std_seg(self, model, X, Y=None, return_loss=False, reduction='none'):
