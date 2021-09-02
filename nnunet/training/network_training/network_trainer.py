@@ -598,7 +598,7 @@ class NetworkTrainer(object):
     class IMA_params:# for D4
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 5
+            self.noise = 10
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
@@ -615,7 +615,7 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
-            self.title = "IMA_075_"
+            self.title = "IMA_08_"
 
             
     class PGD_params_D2:
@@ -636,7 +636,7 @@ class NetworkTrainer(object):
             self.step = 4*self.noise/self.max_iter
             self.title = "PGD"
             
-    class PGD_params_D4:
+    class PGD_params:
         def __init__(self):           
             #used to pass parameters to ima iteration
             self.noise = 5
@@ -1294,7 +1294,7 @@ class NetworkTrainer(object):
         with torch.no_grad():
             output = self.network(Xn)
             ret = self.getOnlineDiceMeanOnlyDoubleClass(output[0], target[0])
-            self.run_online_evaluation(output, target)         
+            self.my_run_online_evaluation(output, target)         
         del target   
         return ret.cpu().numpy()
         
@@ -1423,6 +1423,7 @@ class NetworkTrainer(object):
         ret2 = avg.mean()
         validationDice = np.mean(ret)
         self.print_to_log_file("av global foreground dice: ", ret)
+        self.print_to_log_file("av paired dice: (only with complete target)", ret2)
         self.print_to_log_file("validation dice: %.4f" % validationDice)
         epoch_end_time = time()
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))

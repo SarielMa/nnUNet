@@ -186,6 +186,18 @@ class nnUNetTrainerV2(nnUNetTrainer):
         target = target[0]# Nx1x...
         output = output[0]# Nx3x...
         return super().run_online_evaluation(output, target)
+    
+    def my_run_online_evaluation(self, output, target):
+        """
+        due to deep supervision the return value and the reference are now lists of tensors. We only need the full
+        resolution output because this is what we are interested in in the end. The others are ignored
+        :param output:
+        :param target:
+        :return:
+        """
+        target = target[0]# Nx1x...
+        output = output[0]# Nx3x...
+        return super().my_run_online_evaluation(output, target)
 
     def validate(self, do_mirroring: bool = True, use_sliding_window: bool = True,
                  step_size: float = 0.5, save_softmax: bool = True, use_gaussian: bool = True, overwrite: bool = True,
@@ -328,7 +340,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Y = Y[0]
         #dice=valDice(Yp, Y)
         dice = super().getOnlineDiceMax(Yp, Y)
-        Ypn_e_Y=(dice>0.75)
+        Ypn_e_Y=(dice>0.8)
         return Ypn_e_Y
     
     def run_model_std_seg(self, model, X, Y=None, return_loss=False, reduction='none'):
@@ -682,9 +694,9 @@ class nnUNetTrainerV2(nnUNetTrainer):
         # want at the start of the training
         ds = self.network.do_ds
         self.network.do_ds = True
-        ret = super().run_validate_adv(noise)
+        ret, ret2 = super().run_validate_adv(noise)
         self.network.do_ds = ds
-        return ret
+        return ret,ret2
     def run_IMA_training(self):
         """
         if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first

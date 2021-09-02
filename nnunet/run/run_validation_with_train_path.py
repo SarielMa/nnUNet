@@ -197,46 +197,57 @@ if __name__ == "__main__":
     import random
     random.seed(10)
 
-    #noises = [0, 5,15,25]#D2
-    #noises = [0, 10,25,40]#D5    
-    noises = [0,1,3,5,10]# D4 (0.1 L2=6)
-    
 
-
-    #nets = ["nnUnet", "IMA10(00)","IMA10(01)","PGD10","PGD30","PGD1"]#D4
-    nets = ["IMA5(05)","nnUnet"]#D4
-    #nets = ["nnUnet", "PGD240", "IMA240","PGD160","IMA160"]#D5
-    #nets = ["nnUnet", "PGD50"]#D5
-    
+    choice = 0
+    #dataset name
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
-    selected = dataset[1]
+    selected = dataset[choice]
+    # noise name
+    noiseDict =[[0, 5,15,25],#D2
+                [0,1,3,5,10],#D4 
+                [0, 10,25,40]]#D5 
+    noises = noiseDict[choice]
+    #methods names
+    netDict = [["IMA25(085)","IMA25(080)", "PGD25","PGD5","nnUnet"],#D2
+                ["IMA5(070)","IMA5(050)","PGD5","PGD1","nnUnet"],#D4
+                ["IMA40(080)","IMA40(075)","IMA40(070)","PGD40","PGD10","nnUnet"]#D5
+                ]
+        
+    nets = netDict[choice]
+    #
+    folderDict = []
+    #D4   
+    folders4 = ["fold_0_IMA_070_5/model_IMA_070_5_final_checkpoint.model",
+                "fold_0_IMA_050_5/model_IMA_050_5_final_checkpoint.model",
+               "fold_0_PGD5/model_PGD5_final_checkpoint.model",
+               "fold_0_PGD1/model_PGD1_final_checkpoint.model",
+               "fold_0_base/model_final_checkpoint.model"]
+    #D5   
+    folders5 = ["fold_0_IMA_080_40/model_IMA_080_40_final_checkpoint.model",
+                "fold_0_IMA_075_40/model_IMA_075_40_final_checkpoint.model",
+                "fold_0_IMA_070_40/model_IMA_070_40_final_checkpoint.model",
+               "fold_0_PGD40/model_PGD40_final_checkpoint.model",
+               "fold_0_PGD10/model_PGD10_final_checkpoint.model",
+               "fold_0_base/model_final_checkpoint.model"]  
+    #D2
+    folders2 = ["fold_0_IMA_085_25/model_IMA_085_25_final_checkpoint.model",
+                "fold_0_IMA_080_25/model_IMA_080_25_final_checkpoint.model",
+               "fold_0_PGD25/model_PGD25_final_checkpoint.model",
+               "fold_0_PGD5/model_PGD5_final_checkpoint.model",
+               "fold_0_base/model_final_checkpoint.model"]
+    folderDict.append(folders2)
+    folderDict.append(folders4)
+    folderDict.append(folders5)
+    folders = folderDict[choice]
+
     
     basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
-    #D4
-    
-    folders = ["fold_0_IMA_05_5/model_IMA_05_5_final_checkpoint.model",
-               "fold_0_base/model_final_checkpoint.model"]
-    
-    """
-    folders = ["fold_0_base/model_final_checkpoint.model",
-               "fold_0_IMA30_0_2/model_IMA_0_2_30_final_checkpoint.model",
-               "fold_0_IMA30_0_3/model_IMA_0_3_30_final_checkpoint.model",
-               "fold_0_PGD10/model_PGD10_final_checkpoint.model",
-               "fold_0_PGD30/model_PGD30_final_checkpoint.model",
-               "fold_0_PGD1/model_PGD1_final_checkpoint.model"]
-    """
-    #D5
-    """
-    folders = ["fold_0_base/model_final_checkpoint.model",
-               "fold_0_PGD50/model_PGD50_final_checkpoint.model"]
-    """
-    #D2
-    #folders = ["fold_0_base/model_final_checkpoint.model","fold_0_PGD150/model_PGD_final_checkpoint.model", "fold_0_IMA150/model_IMA_final_checkpoint.model"]
+
     
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111)
     fig2 = plt.figure(figsize=(10, 8))
-    ax2 = fig.add_subplot(111)    
+    ax2 = fig2.add_subplot(111)    
     cols = ['b','g','r','y','k','m','c']
     yAxises = []
     yAxises2 = []
@@ -248,10 +259,11 @@ if __name__ == "__main__":
             yAxises2.append(avgDice)
         ax.plot(noises, yAxises, color=cols[i], label=nets[i])
         ax2.plot(noises, yAxises2, color=cols[i], label=nets[i])
+        yAxises = []
+        yAxises2=[]
 
     
-    #ax.plot(noises, yAxises[1], color='r', label=nets[1])
-    #ax.plot(noises, yAxises[2], color='g', label=nets[2])
+
     ax.set_title(selected)
     ax.set_xlabel("noise(L2)")
     ax.set_ylabel("total Vixel Dice Index")
@@ -263,7 +275,7 @@ if __name__ == "__main__":
 
     ax2.set_title(selected)
     ax2.set_xlabel("noise(L2)")
-    ax2.set_ylabel("Pair Dice Index(only with all classes)")
+    ax2.set_ylabel("avg Pair Dice Index")
     ax2.set_ylim(0,1)
     ax2.set_yticks(np.arange(0, 1.05, step=0.05))
     ax2.legend()

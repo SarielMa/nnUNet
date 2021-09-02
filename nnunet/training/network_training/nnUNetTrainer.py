@@ -725,6 +725,47 @@ class nnUNetTrainer(NetworkTrainer):
             self.online_eval_tp.append(list(tp_hard))
             self.online_eval_fp.append(list(fp_hard))
             self.online_eval_fn.append(list(fn_hard))
+    def my_filter_out(self, target, n_classes):
+        #filter out those lacking classes
+        t = target.view(target.size(0),-1)
+        sensor = torch.ones(t.size(0), dtype = torch.bool).to(t.device.index)
+        for c in range(1, n_classes):
+            temp = (t==c).sum(1)>0
+            sensor = sensor&temp
+        return sensor
+                  
+    def my_run_online_evaluation(self, output, target):
+        # ignore all broken target (that do not have full number of classes)
+        with torch.no_grad():
+            num_classes = output.shape[1]
+            output_softmax = softmax_helper(output)
+            output_seg = output_softmax.argmax(1)
+            target = target[:, 0]
+            axes = tuple(range(1, len(target.shape)))
+            tp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            fp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            fn_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+            for c in range(1, num_classes):
+                tp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target == c).float(), axes=axes)
+                fp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target != c).float(), axes=axes)
+                fn_hard[:, c - 1] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
+                
+            #filter out those whose target lacks classes==================================     
+            good_idx = self.my_filter_out(target, num_classes) 
+            
+            tp_hard = tp_hard[good_idx]
+            fp_hard = fp_hard[good_idx]
+            fn_hard = fn_hard[good_idx]
+            #=========================================================================
+
+            tp_hard = tp_hard.sum(0, keepdim=False).detach().cpu().numpy()
+            fp_hard = fp_hard.sum(0, keepdim=False).detach().cpu().numpy()
+            fn_hard = fn_hard.sum(0, keepdim=False).detach().cpu().numpy()
+
+            self.online_eval_foreground_dc.append(list((2 * tp_hard) / (2 * tp_hard + fp_hard + fn_hard + 1e-8)))
+            self.online_eval_tp.append(list(tp_hard))
+            self.online_eval_fp.append(list(fp_hard))
+            self.online_eval_fn.append(list(fn_hard))
 
     def finish_online_evaluation(self):
         self.online_eval_tp = np.sum(self.online_eval_tp, 0)
@@ -754,10 +795,7 @@ class nnUNetTrainer(NetworkTrainer):
         global_dc_per_class = [i for i in [2 * i / (2 * i + j + k) for i, j, k in
                                            zip(self.online_eval_tp, self.online_eval_fp, self.online_eval_fn)]
                                if not np.isnan(i)]
-        self.all_val_eval_metrics.append(np.mean(global_dc_per_class))
-
-        #self.print_to_log_file("Average global foreground Dice:", str(global_dc_per_class))
-        #self.print_to_log_file("(interpret this as an estimate for the Dice of the different classes. This is not ""exact.)")
+        self.all_val_eval_metrics.append(np.mean(global_dc_per_class))#total vixel dice
 
         self.online_eval_foreground_dc = []
         self.online_eval_tp = []
@@ -835,23 +873,16 @@ class nnUNetTrainer(NetworkTrainer):
                 fp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target != c).float(), axes=axes)
                 fn_hard[:, c - 1] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
 
-            #tp_hard = tp_hard.detach().cpu().numpy()
-            #fp_hard = fp_hard.detach().cpu().numpy()
-            #fn_hard = fn_hard.detach().cpu().numpy()
+            #filter out those whose target lacks classes==================================     
+            good_idx = self.my_filter_out(target, num_classes) 
+            
+            tp_hard = tp_hard[good_idx]
+            fp_hard = fp_hard[good_idx]
+            fn_hard = fn_hard[good_idx]
+            #=========================================================================
 
             batch_dice = (2 * tp_hard) / (2 * tp_hard + fp_hard + fn_hard + 1e-8)#batchsizex2  
-            if num_classes >3:
-                raise ValueError('evaluation only support dataset with one or two classes')
-            elif num_classes ==3:#two classes             
-                bd1 = batch_dice[:,0]
-                bd2 = batch_dice[:,1]
-                batch_dice = batch_dice[(bd1>0)&(bd2>0)]
-                
-            else:
-                #only one class
-                bd1 = batch_dice[:,0]
-                batch_dice = batch_dice[bd1>0]
-            
+
             return batch_dice.mean(1)
         
     def save_checkpoint(self, fname, save_optimizer=True):
