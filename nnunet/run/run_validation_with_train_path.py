@@ -198,30 +198,29 @@ if __name__ == "__main__":
     random.seed(10)
 
 
-    choice = 3
+    choice = 1
     #dataset name
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
     selected = dataset[choice]
     # noise name
     noiseDict =[[0, 5,15,25],#D2
                 [0,1,5,10,15],#D4 
-                [0, 10,25,40],#D5
-                [0,10,20,30,40]]#D9 
+                [0,10,20,40],#D5
+                [0,10,30,70]]#D9 
     noises = noiseDict[choice]
     #methods names
     netDict = [["IMA25", "PGD25","PGD15","PGD5","nnUnet"],#D2
-                ["IMA10(030)","IMA5(030)","PGD10","PGD5","PGD1","nnUnet"],#D4
+                ["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
                 ["IMA40","PGD40","PGD20","PGD10","nnUnet"],#D5
-                ["IMA30","PGD30","PGD10","nnUnet"]#D9
+                ["IMA30","PGD70","PGD30","PGD10","nnUnet"]#D9
                 ]
         
     nets = netDict[choice]
     #
     folderDict = []
     #D4   
-    folders4 = ["fold_0_IMA_030_10/model_IMA_030_10_final_checkpoint.model",
-                "fold_0_IMA_030_5/model_IMA_030_5_final_checkpoint.model",
-                "fold_0_PGD10/model_PGD10_final_checkpoint.model",
+    folders4 = ["fold_0_IMA_060_15/model_IMA_060_15_final_checkpoint.model",
+                "fold_0_PGD15/model_PGD15_final_checkpoint.model",
                "fold_0_PGD5/model_PGD5_final_checkpoint.model",
                "fold_0_PGD1/model_PGD1_final_checkpoint.model",
                "fold_0_base/model_final_checkpoint.model"]
@@ -239,7 +238,8 @@ if __name__ == "__main__":
                "fold_0_base/model_final_checkpoint.model"]
     
     #D9
-    folders9 = ["fold_0_IMA_080_30/model_IMA_080_30_final_checkpoint.model",
+    folders9 = ["fold_0_IMA_070_70/model_IMA_070_70_final_checkpoint.model",
+                "fold_0_PGD70/model_PGD70_final_checkpoint.model",
                 "fold_0_PGD30/model_PGD30_final_checkpoint.model",
                 "fold_0_PGD10/model_PGD10_final_checkpoint.model",
                 "fold_0_base/model_final_checkpoint.model"

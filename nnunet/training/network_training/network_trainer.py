@@ -598,7 +598,7 @@ class NetworkTrainer(object):
     class IMA_params:# for D4
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 5
+            self.noise = 15
             self.norm_type = 2
             self.alpha = 4
             self.max_iter = 20
@@ -615,7 +615,7 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
-            self.title = "IMA_03_"
+            self.title = "IMA_065_"
 
             
     class PGD_params_D2:
