@@ -682,16 +682,41 @@ class MyDataLoader2D(SlimDataLoaderBase):
     def initialize_id(self):
         # assign each 2d sample a id base on their file and slice      
         for k in self.list_of_keys:
+            # get the property file, so that we can decide if its target is good
+            if 'properties' in self._data[k].keys():
+                properties = self._data[k]['properties']
+            else:
+                properties = load_pickle(self._data[k]['properties_file'])  
+            # load the case file
             if isfile(self._data[k]['data_file'][:-4] + ".npy"):
                 temp = np.load(self._data[k]['data_file'][:-4] + ".npy", self.memmap_mode)
             else:
-                temp = np.load(self._data[k]['data_file'])['data']        
-            for i in range(temp.shape[1]):
+                temp = np.load(self._data[k]['data_file'])['data']
+            # how many classes exist in this case
+            foreground_classes = np.array(
+                [i for i in properties['class_locations'].keys() if len(properties['class_locations'][i]) != 0]) 
+            # slice id list in this case
+            slices = np.array(list(range(temp.shape[1])))
+            #filter out ids that lack classes
+            sensor = np.ones(temp.shape[1], dtype = bool)
+            for c in foreground_classes:
+                voxels_of_that_class = properties['class_locations'][c]
+                valid_slices = np.unique(voxels_of_that_class[:, 0])
+                s=np.zeros(temp.shape[1], dtype = bool)
+                s[valid_slices] = True
+                sensor = sensor&s
+            slices = slices[sensor]    
+            for i in slices:
                 self.idx[self.counter] = [k,i]
                 self.counter +=1
                 
+
+                
     def get_slice(self):
-        selected_key, slice_id = self.idx[self.current_slice]        
+        selected_key, slice_id = self.idx[self.current_slice]#map the current slice number to the case and slice location
+ 
+        # check if the current slice's target is good, if not, go to the next one
+        #properties['class_locations']
         case_all_data=0
         if not isfile(self._data[selected_key]['data_file'][:-4] + ".npy"):
             # lets hope you know what you're doing
@@ -704,10 +729,6 @@ class MyDataLoader2D(SlimDataLoaderBase):
             
         case_all_data = case_all_data[:, slice_id]      
         self.current_slice += 1
-        
-        # check if this slice has all classes
-        
-        #=========================================
         
         if self.current_slice >= self.counter:
             self.current_slice = self.current_slice % self.counter

@@ -1420,7 +1420,7 @@ class NetworkTrainer(object):
             print ("one batch is done")
             if data_dict['last']:
                 break
-            if counter ==3:
+            if counter ==20:
                 break
             counter +=1
 
