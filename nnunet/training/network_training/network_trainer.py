@@ -1420,8 +1420,8 @@ class NetworkTrainer(object):
             print ("one batch is done")
             if data_dict['last']:
                 break
-            if counter ==20:
-                break
+            #if counter ==20:
+            #    break
             counter +=1
 
         ret = self.my_finish_online_evaluation()

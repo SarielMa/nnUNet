@@ -198,13 +198,13 @@ if __name__ == "__main__":
     random.seed(10)
 
 
-    choice = 1
+    choice = 0
     #dataset name
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
     selected = dataset[choice]
     # noise name
     noiseDict =[[0, 5,15,25],#D2
-                [0,1,5,10,15],#D4 
+                [0,3,5,10,15],#D4 
                 [0,10,20,40],#D5
                 [0,10,30,70]]#D9 
     noises = noiseDict[choice]
@@ -231,15 +231,15 @@ if __name__ == "__main__":
                "fold_0_PGD10/model_PGD10_final_checkpoint.model",
                "fold_0_base/model_final_checkpoint.model"]  
     #D2
-    folders2 = ["fold_0_IMA_070_25/model_IMA_070_25_final_checkpoint.model",
+    folders2 = ["fold_0_IMA_060_25/model_IMA_060_25_final_checkpoint.model",
                "fold_0_PGD25/model_PGD25_final_checkpoint.model",
                "fold_0_PGD15/model_PGD15_final_checkpoint.model",
                "fold_0_PGD5/model_PGD5_final_checkpoint.model",
                "fold_0_base/model_final_checkpoint.model"]
     
     #D9
-    folders9 = ["fold_0_IMA_070_70/model_IMA_070_70_final_checkpoint.model",
-                "fold_0_PGD70/model_PGD70_final_checkpoint.model",
+    folders9 = ["fold_0_IMA_060_90/model_IMA_060_90_final_checkpoint.model",
+                "fold_0_PGD90/model_PGD90_final_checkpoint.model",
                 "fold_0_PGD30/model_PGD30_final_checkpoint.model",
                 "fold_0_PGD10/model_PGD10_final_checkpoint.model",
                 "fold_0_base/model_final_checkpoint.model"

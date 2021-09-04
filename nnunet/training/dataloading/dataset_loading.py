@@ -653,7 +653,7 @@ class MyTrainDataLoader2D(SlimDataLoaderBase):
         :param random: sample randomly; CAREFUL! non-random sampling requires batch_size=1, otherwise you will iterate batch_size times over the dataset
         :param pseudo_3d_slices: 7 = 3 below and 3 above the center slice
         """
-        super(DataLoader2D, self).__init__(data, batch_size, None)
+        super(MyTrainDataLoader2D, self).__init__(data, batch_size, None)
         if pad_kwargs_data is None:
             pad_kwargs_data = OrderedDict()
         self.pad_kwargs_data = pad_kwargs_data
@@ -743,23 +743,23 @@ class MyTrainDataLoader2D(SlimDataLoaderBase):
 
 
             # slice id list in this case
-            valid_slices = np.array(list(range(case_all_data.shape[1])))
+            slices = np.array(list(range(case_all_data.shape[1])))
             #filter out ids that lack classes
             sensor = np.ones(case_all_data.shape[1], dtype = bool)
-            for c in foreground_classes:
-                voxels_of_that_class = properties['class_locations'][c]
-                valid_slices = np.unique(voxels_of_that_class[:, 0])
+            voxels_of_that_class=[]
+            for ic, c in enumerate(foreground_classes):
+                voxels_of_that_class.append(properties['class_locations'][c])
+                valid_slices = np.unique(voxels_of_that_class[ic][:, 0])
                 s=np.zeros(case_all_data.shape[1], dtype = bool)
                 s[valid_slices] = True
                 sensor = sensor&s
-            valid_slices = valid_slices[sensor]
-            
-            
-            
-            random_slice = np.random.choice(valid_slices)
-            voxels_of_that_class = voxels_of_that_class[voxels_of_that_class[:, 0] == random_slice]
-            voxels_of_that_class = voxels_of_that_class[:, 1:]
-                    
+            slices = slices[sensor]            
+            random_slice = np.random.choice(slices)
+            """
+            for iv, vc in enumerate(voxels_of_that_class):
+                voxels_of_that_class[iv] = voxels_of_that_class[iv][voxels_of_that_class[iv][:, 0] == random_slice]
+                voxels_of_that_class[iv] = voxels_of_that_class[iv][:, 1:]
+            """        
             # get the id for this slice
             slice_id = self.get_id(random_slice, i)
             # now crop case_all_data to contain just the slice of interest. If we want additional slice above and
@@ -812,17 +812,24 @@ class MyTrainDataLoader2D(SlimDataLoaderBase):
 
             # if not force_fg then we can just sample the bbox randomly from lb and ub. Else we need to make sure we get
             # at least one of the foreground classes in the patch
-
-            # this saves us a np.unique. Preprocessing already did that for all cases. Neat.
-            selected_voxel = voxels_of_that_class[np.random.choice(len(voxels_of_that_class))]
-            # selected voxel is center voxel. Subtract half the patch size to get lower bbox voxel.
-            # Make sure it is within the bounds of lb and ub
-            bbox_x_lb = max(lb_x, selected_voxel[0] - self.patch_size[0] // 2)
-            bbox_y_lb = max(lb_y, selected_voxel[1] - self.patch_size[1] // 2)
-
+            #bbox_x_lb = lb_x
+            #bbox_y_lb = lb_y
+            """
+            for iv,vc in enumerate(voxels_of_that_class):
+                # this saves us a np.unique. Preprocessing already did that for all cases. Neat.
+                selected_voxel = vc[np.random.choice(len(vc))]
+                # selected voxel is center voxel. Subtract half the patch size to get lower bbox voxel.
+                # Make sure it is within the bounds of lb and ub
+                bbox_x_lb = max(lb_x, selected_voxel[0] - self.patch_size[0] // 2)
+                
+                bbox_y_lb = max(lb_y, selected_voxel[1] - self.patch_size[1] // 2)
+            """
+            bbox_x_lb = np.random.randint(lb_x, ub_x + 1)
+            bbox_y_lb = np.random.randint(lb_y, ub_y + 1)          
+            
             bbox_x_ub = bbox_x_lb + self.patch_size[0]
             bbox_y_ub = bbox_y_lb + self.patch_size[1]
-
+            
             # whoever wrote this knew what he was doing (hint: it was me). We first crop the data to the region of the
             # bbox that actually lies within the data. This will result in a smaller array which is then faster to pad.
             # valid_bbox is just the coord that lied within the data cube. It will be padded to match the patch size
