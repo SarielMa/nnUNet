@@ -212,7 +212,7 @@ if __name__ == "__main__":
     netDict = [["IMA25", "PGD25","PGD15","PGD5","nnUnet"],#D2
                 ["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
                 ["IMA40","PGD40","PGD20","PGD10","nnUnet"],#D5
-                ["IMA90","PGD90","PGD30","PGD10","nnUnet"]#D9
+                ["IMA90","PGD90","PGD40","PGD10","nnUnet"]#D9
                 ]
         
     nets = netDict[choice]
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     folders5 = ["fold_0_nnUnet/model_IMA_070_40_final_checkpoint.model",
                "fold_0_nnUnet/model_PGD40_final_checkpoint.model",
                "fold_0_nnUnet/model_PGD20_final_checkpoint.model",
-               "fold_0_now/model_PGD10_final_checkpoint.model",
+               "fold_0_nnUnet/model_PGD10_final_checkpoint.model",
                "fold_0_nnUnet/model_final_checkpoint.model"]  
     #D2
     folders2 = ["fold_0_nnUnet/model_IMA_060_25_final_checkpoint.model",
@@ -276,18 +276,18 @@ if __name__ == "__main__":
 
     ax.set_title(selected)
     ax.set_xlabel("noise(L2)")
-    ax.set_ylabel("total Vixel Dice Index")
+    ax.set_ylabel("Total Vixel Dice Index")
     ax.set_ylim(0,1)
     ax.set_yticks(np.arange(0, 1.05, step=0.05))
     ax.legend()
     ax.grid(True)
-    fig.savefig("advVixelDice_result_"+selected+".pdf",bbox_inches='tight')
+    fig.savefig("VixelDice_result_"+selected+".pdf",bbox_inches='tight')
 
     ax2.set_title(selected)
     ax2.set_xlabel("noise(L2)")
-    ax2.set_ylabel("avg Pair Dice Index")
+    ax2.set_ylabel("AVG Dice Index")
     ax2.set_ylim(0,1)
     ax2.set_yticks(np.arange(0, 1.05, step=0.05))
     ax2.legend()
     ax2.grid(True)
-    fig2.savefig("advPairDice_result_"+selected+".pdf",bbox_inches='tight')        
+    fig2.savefig("AVG_Dice_result_"+selected+".pdf",bbox_inches='tight')        
