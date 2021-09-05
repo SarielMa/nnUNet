@@ -422,10 +422,10 @@ class nnUNetTrainer(NetworkTrainer):
                                   oversample_foreground_percent=self.oversample_foreground_percent,
                                   pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r')
         else:
-            dl_tr = MyTrainDataLoader2D(self.dataset_tr, self.basic_generator_patch_size, self.patch_size, self.batch_size,
+            dl_tr = DataLoader2D(self.dataset_tr, self.basic_generator_patch_size, self.patch_size, self.batch_size,
                                  oversample_foreground_percent=self.oversample_foreground_percent,
                                  pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r')
-            dl_val = MyTrainDataLoader2D(self.dataset_val, self.patch_size, self.patch_size, self.batch_size,
+            dl_val = DataLoader2D(self.dataset_val, self.patch_size, self.patch_size, self.batch_size,
                                   oversample_foreground_percent=self.oversample_foreground_percent,
                                   pad_mode="constant", pad_sides=self.pad_all_sides, memmap_mode='r')
             dl_test = MyDataLoader2D(self.dataset_ts, self.patch_size, self.patch_size, self.batch_size,

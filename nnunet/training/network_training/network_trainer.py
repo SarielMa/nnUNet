@@ -615,7 +615,7 @@ class NetworkTrainer(object):
             self.Xn1_equal_X =0
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
-            self.title = "IMA_065_"
+            self.title = "IMA_070_"
 
             
     class PGD_params_D2:
