@@ -31,6 +31,7 @@ from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUN
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 import matplotlib.pyplot as plt
 import numpy as np
+import csv
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -196,9 +197,10 @@ if __name__ == "__main__":
     """
     import random
     random.seed(10)
-
-
+    ##########################need to be configured############################
+    base = "C:/Research/IMA_on_segmentation"
     choice = 1
+    ###########################################################################
     #dataset name
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
     selected = dataset[choice]
@@ -206,9 +208,10 @@ if __name__ == "__main__":
     noiseDict =[[0, 5,15,25],#D2
                 [0,1,5,10,15],#D4 
                 [0,10,20,40],#D5
-                [0,10,40,70]]#D9 
+                [0,10,50,90]]#D9 
     noises = noiseDict[choice]
     #methods names
+    #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
     netDict = [["IMA25", "PGD25","PGD15","PGD5","nnUnet"],#D2
                 ["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
                 ["IMA40","PGD40","PGD20","PGD10","nnUnet"],#D5
@@ -251,7 +254,7 @@ if __name__ == "__main__":
     folders = folderDict[choice]
 
     
-    basePath = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
+    basePath = base+"/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
 
     
     fig = plt.figure(figsize=(10, 8))
@@ -261,6 +264,9 @@ if __name__ == "__main__":
     cols = ['b','g','r','y','k','m','c']
     yAxises = []
     yAxises2 = []
+    fields = ["noise"]+[str(i) for i in noises]
+    rows1 = []
+    rows2 = []
     for i, net in enumerate(nets):
         print ("++++++++++++++++++the net is ", net,"++++++++++++++++++++++++++++++")
         for noise in noises:
@@ -268,7 +274,9 @@ if __name__ == "__main__":
             yAxises.append(vixelDice)
             yAxises2.append(avgDice)
         ax.plot(noises, yAxises, color=cols[i], label=nets[i])
+        rows1.append([net]+[str(round(i,2)) for i in yAxises])
         ax2.plot(noises, yAxises2, color=cols[i], label=nets[i])
+        rows2.append([net]+[str(round(i,2)) for i in yAxises2])
         yAxises = []
         yAxises2=[]
 
@@ -282,6 +290,11 @@ if __name__ == "__main__":
     ax.legend()
     ax.grid(True)
     fig.savefig("VixelDice_result_"+selected+".pdf",bbox_inches='tight')
+    
+    with open("VixelDice_result_"+selected+".csv",'w') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(fields)
+        csvwriter.writerows(rows1)
 
     ax2.set_title(selected)
     ax2.set_xlabel("noise(L2)")
@@ -290,4 +303,9 @@ if __name__ == "__main__":
     ax2.set_yticks(np.arange(0, 1.05, step=0.05))
     ax2.legend()
     ax2.grid(True)
-    fig2.savefig("AVG_Dice_result_"+selected+".pdf",bbox_inches='tight')        
+    fig2.savefig("AVG_Dice_result_"+selected+".pdf",bbox_inches='tight')    
+
+    with open("AVG_Dice_result_"+selected+".csv",'w') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(fields)
+        csvwriter.writerows(rows2)    
