@@ -874,11 +874,11 @@ class nnUNetTrainer(NetworkTrainer):
                 fn_hard[:, c - 1] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
 
             #filter out those whose target lacks classes==================================     
-            good_idx = self.my_filter_out(target, num_classes) 
+            #good_idx = self.my_filter_out(target, num_classes) 
             
-            tp_hard = tp_hard[good_idx]
-            fp_hard = fp_hard[good_idx]
-            fn_hard = fn_hard[good_idx]
+            #tp_hard = tp_hard[good_idx]
+            #fp_hard = fp_hard[good_idx]
+            #fn_hard = fn_hard[good_idx]
             #=========================================================================
 
             batch_dice = (2 * tp_hard) / (2 * tp_hard + fp_hard + fn_hard + 1e-8)#batchsizex2  

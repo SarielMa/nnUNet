@@ -199,21 +199,21 @@ if __name__ == "__main__":
     random.seed(10)
     ##########################need to be configured############################
     base = "C:/Research/IMA_on_segmentation"
-    choice = 1
+    choice = 2
     ###########################################################################
     #dataset name
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
     selected = dataset[choice]
     # noise name
-    noiseDict =[[0, 5,15,25],#D2
+    noiseDict =[[0,5,15,25],#D2
                 [0,1,5,10,15],#D4 
                 [0,10,20,40],#D5
                 [0,10,50,90]]#D9 
     noises = noiseDict[choice]
     #methods names
     #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
-    netDict = [["IMA25", "PGD25","PGD15","PGD5","nnUnet"],#D2
-                ["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
+    netDict = [["nnUnet","IMA25", "PGD25","PGD15","PGD5"],#D2
+                ["nnUnet","IMA15","PGD15","PGD5","PGD1"],#D4
                 ["IMA40","PGD40","PGD20","PGD10","nnUnet"],#D5
                 ["IMA90","PGD90","PGD40","PGD10","nnUnet"]#D9
                 ]
@@ -222,23 +222,24 @@ if __name__ == "__main__":
     #
     folderDict = []
     #D4   
-    folders4 = ["fold_0_nnUnet/model_IMA_060_15_final_checkpoint.model",
-                "fold_0_nnUnet/model_PGD15_final_checkpoint.model",
-               "fold_0_nnUnet/model_PGD5_final_checkpoint.model",
-               "fold_0_nnUnet/model_PGD1_final_checkpoint.model",
-               "fold_0_nnUnet/model_final_checkpoint.model"]
-    #D5   
-    folders5 = ["fold_0_nnUnet/model_IMA_070_40_final_checkpoint.model",
-               "fold_0_nnUnet/model_PGD40_final_checkpoint.model",
-               "fold_0_nnUnet/model_PGD20_final_checkpoint.model",
-               "fold_0_nnUnet/model_PGD10_final_checkpoint.model",
-               "fold_0_nnUnet/model_final_checkpoint.model"]  
-    #D2
-    folders2 = ["fold_0_nnUnet/model_IMA_060_25_final_checkpoint.model",
-               "fold_0_nnUnet/model_PGD25_final_checkpoint.model",
+    folders4 = ["fold_0_nnUnet/model_final_checkpoint.model",
+               "fold_0_nnUnet/model_IMA_060_15_final_checkpoint.model",
                "fold_0_nnUnet/model_PGD15_final_checkpoint.model",
                "fold_0_nnUnet/model_PGD5_final_checkpoint.model",
-               "fold_0_nnUnet/model_final_checkpoint.model"]
+               "fold_0_nnUnet/model_PGD1_final_checkpoint.model"
+               ]
+    #D5   
+    folders5 = ["fold_0_nnUnet/model_final_checkpoint.model",
+                "fold_0_nnUnet/model_IMA_070_40_final_checkpoint.model",
+               "fold_0_nnUnet/model_PGD40_final_checkpoint.model",
+               "fold_0_nnUnet/model_PGD20_final_checkpoint.model",
+               "fold_0_nnUnet/model_PGD10_final_checkpoint.model"]  
+    #D2
+    folders2 = ["fold_0_nnUnet/model_final_checkpoint.model",
+        "fold_0_nnUnet/model_IMA_060_25_final_checkpoint.model",
+               "fold_0_nnUnet/model_PGD25_final_checkpoint.model",
+               "fold_0_nnUnet/model_PGD15_final_checkpoint.model",
+               "fold_0_nnUnet/model_PGD5_final_checkpoint.model"]
     
     #D9
     folders9 = ["fold_0_nnUnet/model_IMA_060_90_final_checkpoint.model",

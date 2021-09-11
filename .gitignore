@@ -125,3 +125,4 @@ rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/._labelsTr
 rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/.DS_Store
 rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/labelsTr/._.DS_Store
 rawData/nnUNet_raw_data/Task04_Hippocampus/Task04_Hippocampus/labelsTr/.DS_Store
+*.csv
