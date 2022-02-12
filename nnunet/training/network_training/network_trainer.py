@@ -551,71 +551,7 @@ class NetworkTrainer(object):
         if isfile(join(self.output_folder, "model_latest.model.pkl")):
             os.remove(join(self.output_folder, "model_latest.model.pkl"))
 
-    class IMA_params_D2:# for D2 and D5
-        def __init__(self):           
-            #used to pass parameters to ima iteration
-            self.noise = 150.0
-            self.norm_type = 2
-            self.alpha = 4
-            self.max_iter = 20
-            self.stop = 1
-            self.refine_Xn_max_iter = 10
-            self.beta = 0.5
-            self.beta_position =1
-            self.E = 0
-            self.epoch_refine = 10
-            self.delta = self.noise/self.epoch_refine
-            self.model_eval_attack=0
-            self.model_eval_Xn=0
-            self.model_Xn_advc_p=0
-            self.Xn1_equal_X =0
-            self.Xn2_equal_Xn =0
-            self.pgd_replace_Y_with_Yp=0   
-            self.title = "IMA"
-            
-    class IMA_params_D5:# for D2 and D5
-        def __init__(self):           
-            #used to pass parameters to ima iteration
-            self.noise = 240.0
-            self.norm_type = 2
-            self.alpha = 4
-            self.max_iter = 20
-            self.stop = 1
-            self.refine_Xn_max_iter = 10
-            self.beta = 0.5
-            self.beta_position =1
-            self.E = 0
-            self.epoch_refine = 10
-            self.delta = self.noise/self.epoch_refine
-            self.model_eval_attack=0
-            self.model_eval_Xn=0
-            self.model_Xn_advc_p=0
-            self.Xn1_equal_X =0
-            self.Xn2_equal_Xn =0
-            self.pgd_replace_Y_with_Yp=0 
-            self.title = "IMA"
 
-    class IMA_params:# for D4
-        def __init__(self):           
-            #used to pass parameters to ima iteration
-            self.noise = 15
-            self.norm_type = 2
-            self.alpha = 4
-            self.max_iter = 20
-            self.stop = 1
-            self.refine_Xn_max_iter = 10
-            self.beta = 0.5#1/6 for thre = 0.5
-            self.beta_position =1
-            self.E = 0
-            self.epoch_refine = 10
-            self.delta = self.noise/self.epoch_refine
-            self.model_eval_attack=0
-            self.model_eval_Xn=0
-            self.model_Xn_advc_p=0
-            self.Xn1_equal_X =0
-            self.Xn2_equal_Xn =0
-            self.pgd_replace_Y_with_Yp=0 
-            self.title = "IMA_070_"
 
             
     class PGD_params_D2:
@@ -746,6 +682,72 @@ class NetworkTrainer(object):
         if filename is not None:
             fig.savefig(filename+str(noise)+'.png')
         plt.close(fig)     
+
+    class IMA_params_D2:# for D2 
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 25
+            self.norm_type = 2
+            self.alpha = 4
+            self.max_iter = 20
+            self.stop = 0
+            self.refine_Xn_max_iter = 10
+            self.beta = 0.5
+            self.beta_position =1
+            self.E = 0
+            self.epoch_refine = 10
+            self.delta = 5
+            self.model_eval_attack=0
+            self.model_eval_Xn=0
+            self.model_Xn_advc_p=0
+            self.Xn1_equal_X =0
+            self.Xn2_equal_Xn =0
+            self.pgd_replace_Y_with_Yp=0   
+            self.title = "AMAT"
+
+    class IMA_params_D4:# for D4
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 15
+            self.norm_type = 2
+            self.alpha = 4
+            self.max_iter = 20
+            self.stop = 0
+            self.refine_Xn_max_iter = 10
+            self.beta = 0.5#1/6 for thre = 0.5
+            self.beta_position =1
+            self.E = 0
+            self.epoch_refine = 10
+            self.delta = 2.5
+            self.model_eval_attack=0
+            self.model_eval_Xn=0
+            self.model_Xn_advc_p=0
+            self.Xn1_equal_X =0
+            self.Xn2_equal_Xn =0
+            self.pgd_replace_Y_with_Yp=0 
+            self.title = "AMAT"
+            
+    class IMA_params_D5:# for D5
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 40
+            self.norm_type = 2
+            self.alpha = 4
+            self.max_iter = 20
+            self.stop = 0
+            self.refine_Xn_max_iter = 10
+            self.beta = 0.5
+            self.beta_position =1
+            self.E = 0
+            self.epoch_refine = 10
+            self.delta = 10
+            self.model_eval_attack=0
+            self.model_eval_Xn=0
+            self.model_Xn_advc_p=0
+            self.Xn1_equal_X =0
+            self.Xn2_equal_Xn =0
+            self.pgd_replace_Y_with_Yp=0 
+            self.title = "AMAT"
         
     def run_IMA_training(self, counter):
         if not torch.cuda.is_available():
@@ -1436,5 +1438,70 @@ class NetworkTrainer(object):
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
         return validationDice, ret2
 
+#%% adversarial part   
+    def run_validate_sample_wise(self, noise):
+        print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
 
+        #_ = self.tr_gen.next()
+        #_ = self.val_gen.next()
+
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+      
+        #self.plot_network_architecture()
+
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        counter = 1
+        epoch_start_time = time()
+        # validation with train=False
+        self.network.eval()
+        #val_losses = []
+        #counter = 0
+        #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
+        avg = []
+        for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue
+            
+            #finishe check
+            avg.append(self.run_one_adv(data_dict, noise))
+            print ("one batch is done")
+            if data_dict['last']:
+                break
+            #if counter ==20:
+            #    break
+            counter +=1
+
+        ret = self.my_finish_online_evaluation()
+        
+        avg = np.concatenate(avg)
+        ret2 = avg
+        validationDice = ret
+        
+        # D5: [>=0.6] 3zscore is 0.8322176449000835, avg mean: 0.85832727
+        # D2: [>=0.6] 3zscore is 0.7422803342342377; avg mean: 0.90798485
+        # D4: [>=0.6] 3zscore is 0.6216422989964485; avg mean: 0.8045869
+        
+        
+        self.print_to_log_file("av global foreground dice: ", ret)
+        self.print_to_log_file("av paired dice: (only with complete target)", ret2.shape)
+        epoch_end_time = time()
+        self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
+        return validationDice, ret2
 

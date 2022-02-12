@@ -340,6 +340,10 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Y = Y[0]
         #dice=valDice(Yp, Y)
         dice = super().getOnlineDiceMax(Yp, Y)
+        
+        # D5: [>=0.6] 3zscore is 0.8322176449000835, avg mean: 0.85832727
+        # D2: [>=0.6] 3zscore is 0.7422803342342377; avg mean: 0.90798485
+        # D4: [>=0.6] 3zscore is 0.6216422989964485; avg mean: 0.8045869
         Ypn_e_Y=(dice>=0.7)
         return Ypn_e_Y
     
@@ -573,6 +577,10 @@ class nnUNetTrainerV2(nnUNetTrainer):
         for i in val_keys[:pivot]:
             self.dataset_val[i] = self.dataset[i]
         self.dataset_ts = OrderedDict()
+        """
+        for i in tr_keys:
+            self.dataset_ts[i] = self.dataset[i]# just for get the distribution
+        """
         for i in val_keys[pivot:]:
             self.dataset_ts[i] = self.dataset[i]
 
