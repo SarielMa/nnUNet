@@ -198,7 +198,7 @@ if __name__ == "__main__":
     random.seed(10)
     ##########################need to be configured############################
     base = "C:/Research/IMA_on_segmentation"
-    choice = 1
+    choice = 2
     ###########################################################################
     #dataset name
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
@@ -220,15 +220,16 @@ if __name__ == "__main__":
     nets = netDict[choice]
     #
     folderDict = []
-    #D4   
-    folders4 = ["fold_0_nnUnet/model_final_checkpoint.model"]
-    #D5   
-    folders5 = ["fold_0_nnUnet/model_final_checkpoint.model"]  
     #D2
-    folders2 = ["fold_0_nnUnet/model_final_checkpoint.model"]
+    folders2 = ["AMATMean100/model_final_checkpoint.model"]
+    #D4   
+    folders4 = ["AMATMean100/model_final_checkpoint.model"]
+    #D5   
+    folders5 = ["AMATMean100/model_final_checkpoint.model"]  
+
     
     #D9
-    folders9 = ["fold_0_nnUnet/model_IMA_060_90_final_checkpoint.model"]
+    folders9 = ["AMATMean100/model_IMA_060_90_final_checkpoint.model"]
     
     folderDict.append(folders2)
     folderDict.append(folders4)

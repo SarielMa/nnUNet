@@ -1494,10 +1494,8 @@ class NetworkTrainer(object):
         ret2 = avg
         validationDice = ret
         
-        # D5: [>=0.6] 3zscore is 0.8322176449000835, avg mean: 0.85832727
-        # D2: [>=0.6] 3zscore is 0.7422803342342377; avg mean: 0.90798485
-        # D4: [>=0.6] 3zscore is 0.6216422989964485; avg mean: 0.8045869
         
+
         
         self.print_to_log_file("av global foreground dice: ", ret)
         self.print_to_log_file("av paired dice: (only with complete target)", ret2.shape)
