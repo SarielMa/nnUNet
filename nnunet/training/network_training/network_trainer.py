@@ -41,7 +41,7 @@ from nnunet.training.loss_functions.dice_loss import DiceIndex, SoftDiceLoss
 from nnunet.utilities.nd_softmax import softmax_helper
 from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_update_margin
 import os.path
-
+from nnunet.utilities.nd_softmax import softmax_helper
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -1300,6 +1300,39 @@ class NetworkTrainer(object):
         del target   
         return ret.cpu().numpy()
         
+    def run_one_adv_to_show(self, data_dict, noise):
+        self.network.eval()
+        #data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']# target is a mask, but should have two...
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)# only the first target among the six is useful
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.optimizer.zero_grad()
+        Xn = 0
+        if noise == 0:
+            Xn = data
+        else:
+            Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
+        
+        ret = 0
+        #valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            #ret = self.getOnlineDiceMeanOnlyDoubleClass(output[0], target[0])
+            #self.my_run_online_evaluation(output, target) 
+            output_softmax = softmax_helper(output[0])
+            output_seg = output_softmax.argmax(1)
+        del target   
+        
+        
+        
+        return 0, Xn, output_seg
+    
     def pgd_attack_2(self,model, X, Y, noise_norm, norm_type, max_iter, step,
                    rand_init=True, rand_init_norm=None, targeted=False,
                    clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
@@ -1503,3 +1536,53 @@ class NetworkTrainer(object):
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
         return validationDice, ret2
 
+#%% adversarial part   
+    def run_validate_adv_showcase(self, noise):
+        print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+
+        #_ = self.tr_gen.next()
+        #_ = self.val_gen.next()
+
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+      
+        #self.plot_network_architecture()
+
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        counter = 1
+        epoch_start_time = time()
+        # validation with train=False
+        self.network.eval()
+        #val_losses = []
+        #counter = 0
+        #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
+        avg = []
+        for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue
+            
+            #finishe check
+            _, Xn, Yn = self.run_one_adv_to_show(data_dict, noise)
+            print ("one case is done")
+            break
+            if data_dict['last']:
+                break
+            #if counter ==20:
+            #    break
+        return Xn,Yn

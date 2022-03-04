@@ -199,13 +199,13 @@ if __name__ == "__main__":
     random.seed(10)
     ##########################need to be configured############################
     base = "C:/Research/IMA_on_segmentation"
-    choice = 1
+    choice = 2
     ###########################################################################
     #dataset name
     dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
     selected = dataset[choice]
     # noise name
-    noiseDict =[[0,5,15,25],#D2
+    noiseDict =[[0,5,10,15],#D2
                 [0,2,4,6,8,10],#D4 
                 [0,10,20,40],#D5
                 [0,10,50,90]]#D9 
@@ -223,11 +223,11 @@ if __name__ == "__main__":
     folderDict = []
     
     #D2
-    folders2 = ["AMATMean100/model_AMATMean10025_final_checkpoint.model",               
-               "AMATMean100/model_PGD25_final_checkpoint.model",
-               "AMATMean100/model_PGD15_final_checkpoint.model",
-               "AMATMean100/model_PGD5_final_checkpoint.model",
-               "AMATMean100/model_final_checkpoint.model"]
+    folders2 = ["AMATMean50/model_AMATMean25_final_checkpoint.model",               
+               "AMATMean50/model_PGD25_final_checkpoint.model",
+               "AMATMean50/model_PGD15_final_checkpoint.model",
+               "AMATMean50/model_PGD5_final_checkpoint.model",
+               "AMATMean50/model_final_checkpoint.model"]
     #D4   
     folders4 = [
                "AMATMean100/model_AMATMean10015_final_checkpoint.model",
@@ -238,12 +238,13 @@ if __name__ == "__main__":
                "AMATMean100/model_final_checkpoint.model"
                ]
     #D5   
-    folders5 = [
-                "AMATMean100/model_AMATMean10025_final_checkpoint.model",
-               "AMATMean100/model_PGD40_final_checkpoint.model",
-               "AMATMean100/model_PGD20_final_checkpoint.model",
-               "AMATMean100/model_PGD10_final_checkpoint.model",
-               "AMATMean100/model_final_checkpoint.model"]  
+    folders5 = ["AMATMean50/model_AMATMean40_final_checkpoint.model",
+        "AMATMean50/model_PGD40_final_checkpoint.model",
+                
+               
+               "AMATMean50/model_PGD20_final_checkpoint.model",
+               "AMATMean50/model_PGD10_final_checkpoint.model",
+               "AMATMean50/model_final_checkpoint.model"]  
 
     
     #D9

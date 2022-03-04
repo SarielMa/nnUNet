@@ -29,11 +29,14 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetTrainerCascadeFullRes
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
+import matplotlib.pyplot as plt
+import numpy as np
+import csv
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
 
-def main():
+def main(noise, filename, taskid):
     parser = argparse.ArgumentParser()
     """
     parser.add_argument("network")
@@ -107,11 +110,12 @@ def main():
     network = args.network
     network_trainer = args.network_trainer
     """
-    task = "004"
+    task = taskid
     fold = "0"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"
-    validation_only = args.validation_only
+    #validation_only = args.validation_only
+    validation_only = False
     plans_identifier = args.p
     find_lr = args.find_lr
     disable_postprocessing_on_folds = args.disable_postprocessing_on_folds
@@ -162,7 +166,7 @@ def main():
     else:
         assert issubclass(trainer_class,
                           nnUNetTrainer), "network_trainer was found but is not derived from nnUNetTrainer"
-
+    # e.g. nnUNetTrainerV2
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
@@ -175,40 +179,100 @@ def main():
         # the training chashes
         trainer.save_latest_only = True  # if false it will not store/overwrite _latest but separate files each
 
-    trainer.initialize(not validation_only)
+    trainer.initialize(training = not validation_only)#only validate it
 
-    if find_lr:
-        trainer.find_lr()
-    else:
-        if not validation_only:
-            if args.continue_training:
-                # -c was set, continue a previous training and ignore pretrained weights
-                trainer.load_latest_checkpoint()
-            elif (not args.continue_training) and (args.pretrained_weights is not None):
-                # we start a new training. If pretrained_weights are set, use them
-                load_pretrained_weights(trainer.network, args.pretrained_weights)
-            else:
-                # new training without pretraine weights, do nothing
-                pass
 
-            trainer.run_IMA_training()
-        else:
-            if valbest:
-                trainer.load_best_checkpoint(train=False)
-            else:
-                trainer.load_final_checkpoint(train=False)
-
-        trainer.network.eval()
-
-        # predict validation
-        trainer.validate(save_softmax=args.npz, validation_folder_name=val_folder,
-                         run_postprocessing_on_folds=not disable_postprocessing_on_folds,
-                         overwrite=args.val_disable_overwrite)
-
-        if network == '3d_lowres' and not args.disable_next_stage_pred:
-            print("predicting segmentations for the next stage of the cascade")
-            predict_next_stage(trainer, join(dataset_directory, trainer.plans['data_identifier'] + "_stage%d" % 1))
-
+    trainer.my_load_final_checkpoint(filename, train=False)
+    Xn, Yn =  trainer.run_validate_adv_showcase(noise)
+    return Xn, Yn
 
 if __name__ == "__main__":
-    main()
+    """
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"]="3"
+    """
+    import random
+    random.seed(10)
+    ##########################need to be configured############################
+    base = "C:/Research/IMA_on_segmentation"
+    choice = 0
+    ###########################################################################
+    #dataset name
+    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
+    selected = dataset[choice]
+    # noise name
+    noiseDict =[[0,5,10,15],#D2
+                [0,8],#D4 
+                [20],#D5
+                [0,10,50,90]]#D9 
+    noises = noiseDict[choice]
+    #methods names
+    #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
+    netDict = [["AMAT", "PGD15","STD"],#D2
+                ["AMAT","PGD15","STD"],#D4
+                ["AMAT","PGD20","STD"],#D5
+                ["IMA90","PGD90","PGD40","PGD10","nnUnet"]#D9
+                ]
+        
+    nets = netDict[choice]
+    nets = ["PGD25"]
+    #
+    folderDict = []
+    
+    #D2
+    folders2 = ["AMATMean50/model_AMATMean25_final_checkpoint.model",               
+
+               "AMATMean50/model_PGD15_final_checkpoint.model",
+
+               "AMATMean50/model_final_checkpoint.model"]
+    folders2 = [              
+
+               "AMATMean50/model_PGD25_final_checkpoint.model"]
+    #D4   
+    folders4 = [
+               "AMATMean100/model_AMATMean10015_final_checkpoint.model",
+               "AMATMean100/model_PGD15_final_checkpoint.model",
+               "AMATMean100/model_final_checkpoint.model"
+               ]
+    #D5   
+    folders5 = ["AMATMean50/model_AMATMean40_final_checkpoint.model",             
+               "AMATMean50/model_PGD20_final_checkpoint.model",
+               "AMATMean50/model_final_checkpoint.model"]  
+
+    
+    #D9
+    folders9 = ["fold_0_nnUnet/model_IMA_060_90_final_checkpoint.model",
+                "fold_0_nnUnet/model_PGD90_final_checkpoint.model",
+                "fold_0_nnUnet/model_PGD40_final_checkpoint.model",
+                "fold_0_nnUnet/model_PGD10_final_checkpoint.model",
+                "fold_0_nnUnet/model_final_checkpoint.model"
+                ]
+    folderDict.append(folders2)
+    folderDict.append(folders4)
+    folderDict.append(folders5)
+    folderDict.append(folders9)
+    folders = folderDict[choice]
+
+    
+    basePath = base+"/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
+
+    import matplotlib.pyplot as plt
+    
+    
+    cols = ['b','g','r','y','k','m','c']
+    yAxises = []
+    yAxises2 = []
+    fields = ["noise"]+[str(i) for i in noises]
+    rows1 = []
+    rows2 = []
+    for i, net in enumerate(nets):
+        print ("++++++++++++++++++the net is ", net,"++++++++++++++++++++++++++++++")
+        for noise in noises:
+            Xn, Yp = main(noise, join(basePath, folders[i]), selected[4:7]) 
+            plt.imshow(Xn[20][0].cpu(),cmap = "gray")
+            plt.imshow(Yp[20].cpu(),cmap = 'jet',alpha = 0.5)
+            plt.savefig(net+str(noise)+".png",bbox_inches='tight')
+            plt.clf()
+    
+
+   
