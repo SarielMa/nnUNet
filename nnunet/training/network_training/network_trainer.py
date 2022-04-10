@@ -831,8 +831,8 @@ class NetworkTrainer(object):
             """
 
             self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
-
-            continue_training = self.my_on_epoch_end(args)
+            
+            #continue_training = self.my_on_epoch_end(args)
 
             epoch_end_time = time()
 

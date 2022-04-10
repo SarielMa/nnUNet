@@ -238,48 +238,50 @@ class IMA_params:# for D2
         self.title = "IMA"+self.task
 
 class IMA_params_D4:# for D4
-    def __init__(self):           
+    def __init__(self, noise, delta):           
         #used to pass parameters to ima iteration
-        self.noise = 15
+        self.task = "004"
+        self.noise = noise #15
         self.norm_type = 2
         self.alpha = 4
         self.max_iter = 20
-        self.stop = 0
+        self.stop = 1
         self.refine_Xn_max_iter = 10
         self.beta = 0.5#1/6 for thre = 0.5
         self.beta_position =1
         self.E = 0
         self.epoch_refine = 10
-        self.delta = 2.5
+        self.delta = delta #2.5
         self.model_eval_attack=0
         self.model_eval_Xn=0
         self.model_Xn_advc_p=0
         self.Xn1_equal_X =0
         self.Xn2_equal_Xn =0
         self.pgd_replace_Y_with_Yp=0 
-        self.title = "AMAT"
+        self.title = "IMA"+self.task
         
 class IMA_params_D5:# for D5
-    def __init__(self):           
+    def __init__(self, noise, delta):           
         #used to pass parameters to ima iteration
-        self.noise = 40
+        self.task = "005"
+        self.noise = noise #40
         self.norm_type = 2
         self.alpha = 4
         self.max_iter = 20
-        self.stop = 0
+        self.stop = 1 #0 for AMAT and 1 for IMA
         self.refine_Xn_max_iter = 10
         self.beta = 0.5
         self.beta_position =1
         self.E = 0
         self.epoch_refine = 10
-        self.delta = 10
+        self.delta = delta #10
         self.model_eval_attack=0
         self.model_eval_Xn=0
         self.model_Xn_advc_p=0
         self.Xn1_equal_X =0
         self.Xn2_equal_Xn =0
         self.pgd_replace_Y_with_Yp=0 
-        self.title = "AMAT"
+        self.title = "IMA"+self.task
 
 if __name__ == "__main__":
     #os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(f'{i}' for i in range(torch.cuda.device_count()))
@@ -294,3 +296,14 @@ if __name__ == "__main__":
     for noise in [15,20,25,30,35]:
         for delta in [3,4,5,6,7]:
             main(IMA_params(noise, delta))
+    """     
+    # D4
+    for noise in [9,12,15,18,21]:
+        for delta in [1.5,2.0,2.5,3.0,3.5]:
+            main(IMA_params_D4(noise, delta))
+
+    # D5
+    for noise in [20,30,40,50,60]:
+        for delta in [5,7.5,10,12.5,15]:
+            main(IMA_params_D5(noise, delta))
+    """
