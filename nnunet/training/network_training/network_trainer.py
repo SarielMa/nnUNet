@@ -748,6 +748,109 @@ class NetworkTrainer(object):
             self.Xn2_equal_Xn =0
             self.pgd_replace_Y_with_Yp=0 
             self.title = "AMAT"
+            
+            
+    def run_IMA_training_grid(self, counter, params):
+        if not torch.cuda.is_available():
+            print("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+
+        _ = self.tr_gen.next()
+        _ = self.val_gen.next()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+        maybe_mkdir_p(self.output_folder)        
+        #self.plot_network_architecture()
+
+        # config IMA parameters
+        #######################################################################################
+        args = params
+        args.E=args.delta*torch.ones(counter, dtype=torch.float32)
+        title = args.title+"_N_"+str(args.noise)+"_D_"+str(args.delta)
+        #E_new=args.E.detach().clone()
+        #######################################################################################
+
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        while self.epoch < self.max_num_epochs:
+            self.print_to_log_file("\nepoch: ", self.epoch)
+            epoch_start_time = time()
+            train_losses_epoch = []
+            #----------------------------
+            flag1=torch.zeros(len(args.E), dtype=torch.float32)
+            flag2=torch.zeros(len(args.E), dtype=torch.float32)
+            E_new=args.E.detach().clone()
+            #---------------------------
+            # train one epoch
+            self.network.train()
+            for c in range(self.num_batches_per_epoch):
+                l, flag1, flag2, E_new = self.run_IMA_iteration(self.tr_gen, args,flag1, flag2, E_new, True)
+                #print("batch ",c,"finished")
+                train_losses_epoch.append(l)
+            # one epoch finished
+            self.all_tr_losses.append(np.mean(train_losses_epoch))
+            self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
+            #------update the margin
+            IMA_update_margin(args, args.delta, args.noise, flag1, flag2, E_new)
+            print('IMA_update_margin: done, margin updated')    
+            self.plot_E(args.E, args.noise,join(self.output_folder, title+'histE'))           
+            
+            #------
+            """
+            
+            with torch.no_grad():
+                # validation with train=False
+                self.network.eval()
+                val_losses = []
+                # run one epoch.....
+                for b in range(self.num_val_batches_per_epoch):
+                    l = self.run_iteration(self.val_gen, False, True)
+                    val_losses.append(l)
+   
+                self.all_val_losses.append(np.mean(val_losses))
+                self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
+
+                if self.also_val_in_tr_mode:
+                    self.network.train()
+                    # validation with train=True
+                    val_losses = []
+                    for b in range(self.num_val_batches_per_epoch):
+                        l = self.run_iteration(self.val_gen, False)
+                        val_losses.append(l)
+                    self.all_val_losses_tr_mode.append(np.mean(val_losses))
+                    self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
+            """
+
+            self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
+
+            continue_training = self.my_on_epoch_end(args)
+
+            epoch_end_time = time()
+
+            if not continue_training:
+                # allows for early stopping
+                break
+
+            self.epoch += 1
+            print ("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
+
+        self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
+
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_"+title+"_final_checkpoint.model"))
+        # now we can delete latest as it will be identical with final
+        if isfile(join(self.output_folder, "model_IMA_latest.model")):
+            os.remove(join(self.output_folder, "model_IMA_latest.model"))
+        if isfile(join(self.output_folder, "model_IMA_latest.model.pkl")):
+            os.remove(join(self.output_folder, "model_IMA_latest.model.pkl"))
         
     def run_IMA_training(self, counter):
         if not torch.cuda.is_available():

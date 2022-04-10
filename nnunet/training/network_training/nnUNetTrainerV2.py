@@ -753,6 +753,22 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ret = super().run_IMA_training(self.dl_tr.counter)#pass the number of samples in training set
         self.network.do_ds = ds
         return ret
+  
+    def run_IMA_training_grid(self, params):
+        """
+        if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
+        continued epoch with self.initial_lr
+
+        we also need to make sure deep supervision in the network is enabled for training, thus the wrapper
+        :return:
+        """
+        self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we
+        # want at the start of the training
+        ds = self.network.do_ds
+        self.network.do_ds = True
+        ret = super().run_IMA_training_grid(self.dl_tr.counter, params)#pass the number of samples in training set
+        self.network.do_ds = ds
+        return ret
     
     def run_PGD_training(self):
         """
