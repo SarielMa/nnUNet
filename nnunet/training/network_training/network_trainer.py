@@ -832,13 +832,13 @@ class NetworkTrainer(object):
 
             self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
             
-            #continue_training = self.my_on_epoch_end(args)
+            #continue_training = self.my_on_epoch_end_grid(args)
 
             epoch_end_time = time()
 
-            if not continue_training:
+            #if not continue_training:
                 # allows for early stopping
-                break
+            #    break
 
             self.epoch += 1
             print ("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
@@ -1098,7 +1098,20 @@ class NetworkTrainer(object):
 
         continue_training = self.manage_patience()
         return continue_training
+    def my_on_epoch_end_grid(self, args):
+        #self.finish_online_evaluation()  # does not have to do anything, but can be used to update self.all_val_eval_
+        # metrics
 
+        #self.my_plot_progress(args)
+
+        self.maybe_update_lr()
+
+        self.my_maybe_save_checkpoint(args)
+
+        #self.update_eval_criterion_MA()
+
+        continue_training = self.manage_patience()
+        return continue_training
     def update_train_loss_MA(self):
         if self.train_loss_MA is None:
             self.train_loss_MA = self.all_tr_losses[-1]

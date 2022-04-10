@@ -291,7 +291,7 @@ if __name__ == "__main__":
     #freeze_support()
 
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
-    os.environ["CUDA_VISIBLE_DEVICES"]="0"
+    os.environ["CUDA_VISIBLE_DEVICES"]="1"
     # D2
     for noise in [15,20,25,30,35]:
         for delta in [3,4,5,6,7]:
