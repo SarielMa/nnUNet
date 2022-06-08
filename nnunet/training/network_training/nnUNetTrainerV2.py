@@ -52,7 +52,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
                  unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
                          deterministic, fp16)
-        self.max_num_epochs =50
+        self.max_num_epochs =100
         self.initial_lr = 1e-2
         self.deep_supervision_scales = None
         self.ds_loss_weights = None
@@ -345,7 +345,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         # D4: avg mean: 0.8065869;
         # D5: avg mean: 0.86081946;
         
-        Ypn_e_Y=(dice>=0.7)
+        Ypn_e_Y=(dice>=0.8065869)
         return Ypn_e_Y
     
     def run_model_std_seg(self, model, X, Y=None, return_loss=False, reduction='none'):
@@ -445,6 +445,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
             stop_if_label_change=True
         elif stop==3:
             stop_if_label_change_next_step=True
+        else:
+            print ("AMAT is running")
         #E_new=args.E.detach().clone()
         ###################################################
         
@@ -691,7 +693,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ret = super().run_training()
         self.network.do_ds = ds
         return ret
-    def run_validate_adv(self, noise):
+    def run_validate_adv_IFGSM(self, noise):
         """
         if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
         continued epoch with self.initial_lr
@@ -703,7 +705,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         # want at the start of the training
         ds = self.network.do_ds
         self.network.do_ds = True
-        ret, ret2 = super().run_validate_adv(noise)
+        ret, ret2 = super().run_validate_adv_IFGSM(noise)
         self.network.do_ds = ds
         return ret,ret2
     

@@ -42,6 +42,7 @@ from nnunet.utilities.nd_softmax import softmax_helper
 from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_update_margin
 import os.path
 from nnunet.utilities.nd_softmax import softmax_helper
+#from Evaluate_advertorch import test_adv
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -677,80 +678,16 @@ class NetworkTrainer(object):
             
     def plot_E(self, E, noise, filename=None):
         fig, ax = plt.subplots()
-        ax.hist(E.cpu().numpy(), bins=100, range=(0, noise))
+        ax.hist(E.cpu().numpy(), bins=20, range =[0, 2*E.max().item()] )
         #display.display(fig)
         if filename is not None:
-            fig.savefig(filename+str(noise)+'.png')
-        plt.close(fig)     
-
-    class IMA_params_D2:# for D2 
-        def __init__(self):           
-            #used to pass parameters to ima iteration
-            self.noise = 25
-            self.norm_type = 2
-            self.alpha = 4
-            self.max_iter = 20
-            self.stop = 0
-            self.refine_Xn_max_iter = 10
-            self.beta = 0.5
-            self.beta_position =1
-            self.E = 0
-            self.epoch_refine = 10
-            self.delta = 5
-            self.model_eval_attack=0
-            self.model_eval_Xn=0
-            self.model_Xn_advc_p=0
-            self.Xn1_equal_X =0
-            self.Xn2_equal_Xn =0
-            self.pgd_replace_Y_with_Yp=0   
-            self.title = "AMAT"
-
-    class IMA_params_D4:# for D4
-        def __init__(self):           
-            #used to pass parameters to ima iteration
-            self.noise = 15
-            self.norm_type = 2
-            self.alpha = 4
-            self.max_iter = 20
-            self.stop = 0
-            self.refine_Xn_max_iter = 10
-            self.beta = 0.5#1/6 for thre = 0.5
-            self.beta_position =1
-            self.E = 0
-            self.epoch_refine = 10
-            self.delta = 2.5
-            self.model_eval_attack=0
-            self.model_eval_Xn=0
-            self.model_Xn_advc_p=0
-            self.Xn1_equal_X =0
-            self.Xn2_equal_Xn =0
-            self.pgd_replace_Y_with_Yp=0 
-            self.title = "AMAT"
+            fig.savefig(filename+'AMAT.png')
+        plt.close(fig)         
+        
+        
+        
             
-    class IMA_params_D5:# for D5
-        def __init__(self):           
-            #used to pass parameters to ima iteration
-            self.noise = 40
-            self.norm_type = 2
-            self.alpha = 4
-            self.max_iter = 20
-            self.stop = 0
-            self.refine_Xn_max_iter = 10
-            self.beta = 0.5
-            self.beta_position =1
-            self.E = 0
-            self.epoch_refine = 10
-            self.delta = 10
-            self.model_eval_attack=0
-            self.model_eval_Xn=0
-            self.model_Xn_advc_p=0
-            self.Xn1_equal_X =0
-            self.Xn2_equal_Xn =0
-            self.pgd_replace_Y_with_Yp=0 
-            self.title = "AMAT"
-            
-            
-    def run_IMA_training_grid(self, counter, params):
+    def run_IMA_training_grid(self, counter, params):    
         if not torch.cuda.is_available():
             print("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
 
@@ -793,6 +730,7 @@ class NetworkTrainer(object):
             # train one epoch
             self.network.train()
             for c in range(self.num_batches_per_epoch):
+            #for c in range(1):
                 l, flag1, flag2, E_new = self.run_IMA_iteration(self.tr_gen, args,flag1, flag2, E_new, True)
                 #print("batch ",c,"finished")
                 train_losses_epoch.append(l)
@@ -802,7 +740,7 @@ class NetworkTrainer(object):
             #------update the margin
             IMA_update_margin(args, args.delta, args.noise, flag1, flag2, E_new)
             print('IMA_update_margin: done, margin updated')    
-            self.plot_E(args.E, args.noise,join(self.output_folder, title+'histE'))           
+            self.plot_E(args.E, max(args.E),join(self.output_folder, title+'histE'))           
             
             #------
             """
@@ -1370,6 +1308,48 @@ class NetworkTrainer(object):
             Xn=Xn.detach()
         #---------------------------
         return Xn
+    
+    def ifgsm_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
+                   rand_init=True, rand_init_norm=None, targeted=False,
+                   clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
+        #-----------------------------------------------------
+        if loss_fn is None :
+            raise ValueError('loss_fn is unkown')
+        #-----------------
+        X = X.detach()
+        #-----------------
+        Xn = X.clone().detach() # must clone
+        #-----------------
+        noise_new=(Xn-X).detach()
+        if use_optimizer == True:
+            optimizer = optim.Adamax([noise_new], lr=step)
+        #-----------------
+        for n in range(0, max_iter):
+            Xn = Xn.detach()
+            Xn.requires_grad = True
+            Zn = model(Xn)
+            loss = loss_fn(Zn, Y)
+            #---------------------------
+            if targeted == True:
+                loss=-loss
+            #---------------------------
+            #loss.backward() will update W.grad
+            grad_n=torch.autograd.grad(loss, Xn)[0]
+            grad_n=self.normalize_grad_(grad_n, norm_type)
+            if use_optimizer == True:
+                noise_new.grad=-grad_n.detach() #grad ascent to maximize loss
+                optimizer.step()
+            else:
+                Xnew = Xn.detach() + step*grad_n.detach()
+                noise_new = Xnew-X
+            #---------------------
+            self.clip_norm_(noise_new, norm_type, noise_norm)
+            #Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+            Xn = X+noise_new
+            noise_new.data -= noise_new.data-(Xn-X).data
+            Xn=Xn.detach()
+        #---------------------------
+        return Xn
 #%% adversarial part
     """
     def dice(self,Mp, M, reduction='none'):
@@ -1415,7 +1395,35 @@ class NetworkTrainer(object):
             self.my_run_online_evaluation(output, target)         
         del target   
         return ret.cpu().numpy()
+
+    def run_one_adv_ifgsm(self, data_dict, noise):
+        self.network.eval()
+        #data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']# target is a mask, but should have two...
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)# only the first target among the six is useful
         
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.optimizer.zero_grad()
+        Xn = 0
+        if noise == 0:
+            Xn = data
+        else:
+            #Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
+            Xn = self.ifgsm_attack(self.network, data, target, noise, 2, 10, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
+        ret = 0
+        #valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            ret = self.getOnlineDiceMeanOnlyDoubleClass(output[0], target[0])
+            self.my_run_online_evaluation(output, target)         
+        del target   
+        return ret.cpu().numpy()
+
     def run_one_adv_to_show(self, data_dict, noise):
         self.network.eval()
         #data_dict = next(data_generator)
@@ -1586,7 +1594,67 @@ class NetworkTrainer(object):
         epoch_end_time = time()
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
         return validationDice, ret2
+#%% adversarial part   
+    def run_validate_adv_IFGSM(self, noise):
+        print ("+++++++++++++++++noise ",str(noise)," is running, (IFGSM)+++++++++++++++++++++++++++++++")
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
 
+        #_ = self.tr_gen.next()
+        #_ = self.val_gen.next()
+
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+      
+        #self.plot_network_architecture()
+
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        counter = 1
+        epoch_start_time = time()
+        # validation with train=False
+        self.network.eval()
+        #val_losses = []
+        #counter = 0
+        #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
+        avg = []
+        for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue
+            
+            #finishe check
+            avg.append(self.run_one_adv_ifgsm(data_dict, noise))
+            print ("one batch is done")
+            if data_dict['last']:
+                break
+            #if counter ==20:
+            #    break
+            counter +=1
+
+        ret = self.my_finish_online_evaluation()
+        
+        avg = np.concatenate(avg)
+        ret2 = avg.mean()
+        validationDice = np.mean(ret)
+        self.print_to_log_file("av global foreground dice: ", ret)
+        self.print_to_log_file("av paired dice: (only with complete target)", ret2)
+        self.print_to_log_file("validation dice: %.4f" % validationDice)
+        epoch_end_time = time()
+        self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
+        return validationDice, ret2
 #%% adversarial part   
     def run_validate_sample_wise(self, noise):
         print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")

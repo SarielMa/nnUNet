@@ -335,6 +335,10 @@ class nnUNetTrainer(NetworkTrainer):
     def run_validate_adv(self, noise):
         self.save_debug_information()
         return super(nnUNetTrainer, self).run_validate_adv(noise)
+    
+    def run_validate_adv_IFGSM(self, noise):
+        self.save_debug_information()
+        return super(nnUNetTrainer, self).run_validate_adv_IFGSM(noise)
     def run_validate_adv_showcase(self, noise):
         self.save_debug_information()
         return super(nnUNetTrainer, self).run_validate_adv_showcase(noise)
