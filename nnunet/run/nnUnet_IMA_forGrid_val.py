@@ -116,7 +116,9 @@ def cal_AUC_robustness_2(acc_list, noise_level_list, maxNoise):
 
 def get_heat_map(data, epsilons, deltas, path):
     #heatmap = np.array(data)
+    #plt.rcParams["mathtext.fontset"] = "cm"
     fig, ax = plt.subplots(figsize=(8,7))
+    plt.rc('text', usetex=True)
     df = pd.DataFrame(data, index = epsilons, columns = deltas)
     df["mean"] = df.mean(axis = 1)
     df.loc["mean"] = df.mean(axis = 0)
@@ -128,7 +130,7 @@ def get_heat_map(data, epsilons, deltas, path):
     df_m.loc["mean","mean"] = float("nan")
     sns.heatmap(ax = ax, data = df_v, annot=True, fmt = ".4f", cmap="Reds",)
     sns.heatmap(ax = ax, data = df_m, annot=True, fmt = ".4f", cmap="Blues",)
-    ax.set(ylabel='Noise', xlabel='Delta')
+    ax.set(ylabel=''r'$\epsilon$', xlabel=''r'$\Delta_\epsilon$')
     ax.figure.savefig(path+".pdf", bbox_inches='tight',pad_inches=0.0)
     ax.figure.clf()
 
@@ -138,7 +140,7 @@ if __name__=="__main__":
     # in paper it is 1.5
     import matplotlib.pyplot as plt
     import seaborn as sns
-    choice = 0
+    choice = 2
     task = ""
     mat = []
     matacc=[]

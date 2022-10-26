@@ -265,7 +265,7 @@ def classify_model_adv_output_seg(Ypn, Y):
 """
 #%%
 # this is in fact binary PGD attack
-def pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
+def pgd_attack(task, model, X, Y, noise_norm, norm_type, max_iter, step,
                rand_init_norm=None, rand_init_Xn=None,
                targeted=False, clip_X_min=0, clip_X_max=1,
                refine_Xn_max_iter=10,
@@ -306,7 +306,7 @@ def pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
         Xn = Xn.detach()
         Xn.requires_grad = True        
         Ypn, loss=run_model(model, Xn, Y, return_loss=True, reduction='sum')
-        Ypn_e_Y=classify_model_output(Ypn, Y)
+        Ypn_e_Y=classify_model_output(Ypn, Y, task)
         Ypn_ne_Y=~Ypn_e_Y
         #---------------------------
         #targeted attack, Y should be filled with targeted output
@@ -397,7 +397,7 @@ def refine_Xn2_onto_boundary(model, Xn1, Xn2, Y, max_iter, run_model, classify_m
     Xn, Xn1, Xn2=refine_onto_boundary(model, Xn1, Xn2, Y, max_iter, run_model, classify_model_output)
     return Xn2
 #%%
-def repeated_pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
+def repeated_pgd_attack(task,model, X, Y, noise_norm, norm_type, max_iter, step,
                         rand_init_norm=None, rand_init_Xn=None,
                         targeted=False, clip_X_min=0, clip_X_max=1,
                         refine_Xn_max_iter=10,
@@ -411,7 +411,7 @@ def repeated_pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
                         model_eval_attack=False,
                         num_repeats=1):
     for m in range(0, num_repeats):
-        Xm, advcm = pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
+        Xm, advcm = pgd_attack(task, model, X, Y, noise_norm, norm_type, max_iter, step,
                                rand_init_norm, rand_init_Xn,
                                targeted, clip_X_min, clip_X_max,
                                refine_Xn_max_iter,
@@ -433,7 +433,7 @@ def repeated_pgd_attack(model, X, Y, noise_norm, norm_type, max_iter, step,
     #-------- 
     return Xn, advc
 #%%
-def IMA_loss(model, X, Y, margin, norm_type, max_iter, step,
+def IMA_loss(task, model, X, Y, margin, norm_type, max_iter, step,
              rand_init_norm=None, rand_init_Xn=None,
              clip_X_min=0, clip_X_max=1,
              refine_Xn_max_iter=10,
@@ -494,7 +494,7 @@ def IMA_loss(model, X, Y, margin, norm_type, max_iter, step,
         Ypgd=Y
         if pgd_replace_Y_with_Yp == True:
             Ypgd=Yp.detach()
-        Xn, advc = repeated_pgd_attack(model, X, Y=Ypgd,
+        Xn, advc = repeated_pgd_attack(task,model, X, Y=Ypgd,
                                        noise_norm=margin, norm_type=norm_type,
                                        max_iter=max_iter, step=step,
                                        rand_init_norm=rand_init_norm, rand_init_Xn=rand_init_Xn,

@@ -18,7 +18,7 @@ curDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())
 curDir = os.path.dirname(curDir)
 curDir = os.path.dirname(curDir)
 sys.path.insert(0, curDir)
-
+import torch
 import argparse
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.run.default_configuration import get_default_configuration
@@ -29,21 +29,13 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetTrainerCascadeFullRes
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
-import matplotlib.pyplot as plt
-import numpy as np
-import csv
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
 
-def main(noise, filename, taskid):
+def main():
     parser = argparse.ArgumentParser()
-    """
-    parser.add_argument("network")
-    parser.add_argument("network_trainer")
-    parser.add_argument("task", help="can be task name or task id")
-    parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
-    """
+    parser.add_argument("--task", type = str, default = "004", help="can be task name or task id")    
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
@@ -87,13 +79,6 @@ def main(noise, filename, taskid):
                              "running postprocessing on each fold is computationally cheap, but some users have "
                              "reported issues with very large images. If your images are large (>600x600x600 voxels) "
                              "you should consider setting this flag.")
-    # parser.add_argument("--interp_order", required=False, default=3, type=int,
-    #                     help="order of interpolation for segmentations. Testing purpose only. Hands off")
-    # parser.add_argument("--interp_order_z", required=False, default=0, type=int,
-    #                     help="order of interpolation along z if z is resampled separately. Testing purpose only. "
-    #                          "Hands off")
-    # parser.add_argument("--force_separate_z", required=False, default="None", type=str,
-    #                     help="force_separate_z resampling. Can be None, True or False. Testing purpose only. Hands off")
     parser.add_argument('--val_disable_overwrite', action='store_false', default=True,
                         help='Validation does not overwrite existing segmentations')
     parser.add_argument('--disable_next_stage_pred', action='store_true', default=False,
@@ -102,62 +87,42 @@ def main(noise, filename, taskid):
                         help='path to nnU-Net checkpoint file to be used as pretrained model (use .model '
                              'file, for example model_final_checkpoint.model). Will only be used when actually training. '
                              'Optional. Beta. Use with caution.')
-
+    
+    parser.add_argument('--cuda_id', type=str, required=False, default="0")
+    
     args = parser.parse_args()
-    """
+    
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"]=args.cuda_id    
+    
+    
+        
     task = args.task
-    fold = args.fold
-    network = args.network
-    network_trainer = args.network_trainer
-    """
-    task = taskid
     fold = "0"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"
-    #validation_only = args.validation_only
-    validation_only = False
+    validation_only = args.validation_only
     plans_identifier = args.p
     find_lr = args.find_lr
     disable_postprocessing_on_folds = args.disable_postprocessing_on_folds
-
     use_compressed_data = args.use_compressed_data
     decompress_data = not use_compressed_data
-
     deterministic = args.deterministic
     valbest = args.valbest
-
     fp32 = args.fp32
     run_mixed_precision = not fp32
-
     val_folder = args.val_folder
-    # interp_order = args.interp_order
-    # interp_order_z = args.interp_order_z
-    # force_separate_z = args.force_separate_z
-
     if not task.startswith("Task"):
         task_id = int(task)
         task = convert_id_to_task_name(task_id)
-
     if fold == 'all':
         pass
     else:
         fold = int(fold)
-
-    # if force_separate_z == "None":
-    #     force_separate_z = None
-    # elif force_separate_z == "False":
-    #     force_separate_z = False
-    # elif force_separate_z == "True":
-    #     force_separate_z = True
-    # else:
-    #     raise ValueError("force_separate_z must be None, True or False. Given: %s" % force_separate_z)
-
     plans_file, output_folder_name, dataset_directory, batch_dice, stage, \
     trainer_class = get_default_configuration(network, task, network_trainer, plans_identifier)
-
     if trainer_class is None:
         raise RuntimeError("Could not find trainer class in nnunet.training.network_training")
-
     if network == "3d_cascade_fullres":
         assert issubclass(trainer_class, (nnUNetTrainerCascadeFullRes, nnUNetTrainerV2CascadeFullRes)), \
             "If running 3d_cascade_fullres then your " \
@@ -166,7 +131,6 @@ def main(noise, filename, taskid):
     else:
         assert issubclass(trainer_class,
                           nnUNetTrainer), "network_trainer was found but is not derived from nnUNetTrainer"
-    # e.g. nnUNetTrainerV2
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
@@ -178,141 +142,38 @@ def main(noise, filename, taskid):
         trainer.save_intermediate_checkpoints = True  # whether or not to save checkpoint_latest. We need that in case
         # the training chashes
         trainer.save_latest_only = True  # if false it will not store/overwrite _latest but separate files each
+    trainer.initialize(not validation_only)
+    if find_lr:
+        trainer.find_lr()
+    else:
+        if not validation_only:
+            if args.continue_training:
+                # -c was set, continue a previous training and ignore pretrained weights
+                trainer.load_latest_checkpoint()
+            elif (not args.continue_training) and (args.pretrained_weights is not None):
+                # we start a new training. If pretrained_weights are set, use them
+                load_pretrained_weights(trainer.network, args.pretrained_weights)
+            else:
+                # new training without pretraine weights, do nothing
+                pass
+            trainer.run_TRADES_training()
+        else:
+            if valbest:
+                trainer.load_best_checkpoint(train=False)
+            else:
+                trainer.load_final_checkpoint(train=False)
 
-    trainer.initialize(training = not validation_only)#only validate it
+        trainer.network.eval()
 
+        # predict validation
+        trainer.validate(save_softmax=args.npz, validation_folder_name=val_folder,
+                         run_postprocessing_on_folds=not disable_postprocessing_on_folds,
+                         overwrite=args.val_disable_overwrite)
 
-    trainer.my_load_final_checkpoint(filename, train=False)
-    return trainer.run_validate_adv(noise)
-    
-      
-
-
+        if network == '3d_lowres' and not args.disable_next_stage_pred:
+            print("predicting segmentations for the next stage of the cascade")
+            predict_next_stage(trainer, join(dataset_directory, trainer.plans['data_identifier'] + "_stage%d" % 1))
 
 
 if __name__ == "__main__":
-    """
-    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
-    os.environ["CUDA_VISIBLE_DEVICES"]="3"
-    """
-    import random
-    random.seed(10)
-    ##########################need to be configured############################
-    base = "C:/Research/IMA_on_segmentation"
-    choice = 2
-    ###########################################################################
-    #dataset name
-    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
-    selected = dataset[choice]
-    # noise name
-    noiseDict =[[0,5,10,15],#D2
-                [0,2,4,6,8,10],#D4 
-                [0,10,20,40],#D5
-                [0,10,50,90]]#D9 
-    noises = noiseDict[choice]
-    #methods names
-    #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
-    netDict = [["AMAT", "PGD25","PGD15","PGD5","STD"],#D2
-                ["AMAT","PGD15","PGD10","PGD5","PGD1","STD"],#D4
-                ["AMAT","PGD40","PGD20","PGD10","STD"],#D5
-                ["IMA90","PGD90","PGD40","PGD10","nnUnet"]#D9
-                ]
-        
-    nets = netDict[choice]
-    #
-    folderDict = []
-    
-    #D2
-    folders2 = ["AMATMean50/model_AMATMean25_final_checkpoint.model",               
-               "AMATMean50/model_PGD25_final_checkpoint.model",
-               "AMATMean50/model_PGD15_final_checkpoint.model",
-               "AMATMean50/model_PGD5_final_checkpoint.model",
-               "AMATMean50/model_final_checkpoint.model"]
-    #D4   
-    folders4 = [
-               "AMATMean100/model_AMATMean10015_final_checkpoint.model",
-               "AMATMean100/model_PGD15_final_checkpoint.model",
-               "AMATMean100/model_PGD10_final_checkpoint.model",
-               "AMATMean100/model_PGD5_final_checkpoint.model",
-               "AMATMean100/model_PGD1_final_checkpoint.model",
-               "AMATMean100/model_final_checkpoint.model"
-               ]
-    #D5   
-    folders5 = ["AMATMean50/model_AMATMean40_final_checkpoint.model",
-        "AMATMean50/model_PGD40_final_checkpoint.model",
-                
-               
-               "AMATMean50/model_PGD20_final_checkpoint.model",
-               "AMATMean50/model_PGD10_final_checkpoint.model",
-               "AMATMean50/model_final_checkpoint.model"]  
-
-    
-    #D9
-    folders9 = ["fold_0_nnUnet/model_IMA_060_90_final_checkpoint.model",
-                "fold_0_nnUnet/model_PGD90_final_checkpoint.model",
-                "fold_0_nnUnet/model_PGD40_final_checkpoint.model",
-                "fold_0_nnUnet/model_PGD10_final_checkpoint.model",
-                "fold_0_nnUnet/model_final_checkpoint.model"
-                ]
-    folderDict.append(folders2)
-    folderDict.append(folders4)
-    folderDict.append(folders5)
-    folderDict.append(folders9)
-    folders = folderDict[choice]
-
-    
-    basePath = base+"/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
-
-    
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111)
-    fig2 = plt.figure(figsize=(10, 8))
-    ax2 = fig2.add_subplot(111)    
-    cols = ['b','g','r','y','k','m','c']
-    yAxises = []
-    yAxises2 = []
-    fields = ["noise"]+[str(i) for i in noises]
-    rows1 = []
-    rows2 = []
-    for i, net in enumerate(nets):
-        print ("++++++++++++++++++the net is ", net,"++++++++++++++++++++++++++++++")
-        for noise in noises:
-            vixelDice,avgDice = main(noise, join(basePath, folders[i]), selected[4:7]) 
-            yAxises.append(vixelDice)
-            yAxises2.append(avgDice)
-        ax.plot(noises, yAxises, color=cols[i], label=nets[i])
-        rows1.append([net]+[str(round(i,2)) for i in yAxises])
-        ax2.plot(noises, yAxises2, color=cols[i], label=nets[i])
-        rows2.append([net]+[str(round(i,2)) for i in yAxises2])
-        yAxises = []
-        yAxises2=[]
-
-    
-
-    ax.set_title(selected)
-    ax.set_xlabel("noise(L2)")
-    ax.set_ylabel("Total Vixel Dice Index")
-    ax.set_ylim(0,1)
-    ax.set_yticks(np.arange(0, 1.05, step=0.05))
-    ax.legend()
-    ax.grid(True)
-    fig.savefig("VixelDice_result_"+selected+".pdf",bbox_inches='tight')
-    
-    with open("VixelDice_result_"+selected+".csv",'w') as csvfile:
-        csvwriter = csv.writer(csvfile)
-        csvwriter.writerow(fields)
-        csvwriter.writerows(rows1)
-
-    ax2.set_title(selected)
-    ax2.set_xlabel("noise(L2)")
-    ax2.set_ylabel("AVG Dice Index")
-    ax2.set_ylim(0,1)
-    ax2.set_yticks(np.arange(0, 1.05, step=0.05))
-    ax2.legend()
-    ax2.grid(True)
-    fig2.savefig("AVG_Dice_result_"+selected+".pdf",bbox_inches='tight')    
-
-    with open("AVG_Dice_result_"+selected+".csv",'w') as csvfile:
-        csvwriter = csv.writer(csvfile)
-        csvwriter.writerow(fields)
-        csvwriter.writerows(rows2)    
+    main()

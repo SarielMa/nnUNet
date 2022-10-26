@@ -891,6 +891,210 @@ class NetworkTrainer(object):
         if isfile(join(self.output_folder, "model_IMA_latest.model.pkl")):
             os.remove(join(self.output_folder, "model_IMA_latest.model.pkl"))
 
+    def run_TRADES_training(self, counter):
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+
+        _ = self.tr_gen.next()
+        _ = self.val_gen.next()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+        maybe_mkdir_p(self.output_folder)        
+        #self.plot_network_architecture()
+
+        # config IMA parameters
+        #######################################################################################
+        title = "TRADES_beta6_epsilon8"
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        while self.epoch < self.max_num_epochs:
+            self.print_to_log_file("\nepoch: ", self.epoch)
+            epoch_start_time = time()
+            train_losses_epoch = []
+            #----------------------------
+            # train one epoch
+            self.network.train()
+            for c in range(self.num_batches_per_epoch):
+                l = self.run_TRADES_iteration(self.tr_gen, True)
+                #print("batch ",c,"finished")
+                train_losses_epoch.append(l)
+            # one epoch finished
+            self.all_tr_losses.append(np.mean(train_losses_epoch))
+            self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
+            #------          
+            with torch.no_grad():
+                # validation with train=False
+                self.network.eval()
+                val_losses = []
+                # run one epoch.....
+                for b in range(self.num_val_batches_per_epoch):
+                    l = self.run_iteration(self.val_gen, False, True)
+                    val_losses.append(l)
+   
+                self.all_val_losses.append(np.mean(val_losses))
+                self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
+
+                if self.also_val_in_tr_mode:
+                    self.network.train()
+                    # validation with train=True
+                    val_losses = []
+                    for b in range(self.num_val_batches_per_epoch):
+                        l = self.run_iteration(self.val_gen, False)
+                        val_losses.append(l)
+                    self.all_val_losses_tr_mode.append(np.mean(val_losses))
+                    self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
+            
+
+            self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
+
+            continue_training = self.on_epoch_end()
+
+            epoch_end_time = time()
+
+            if not continue_training:
+                # allows for early stopping
+                break
+
+            self.epoch += 1
+            self.print_to_log_file("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
+
+        self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
+
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_"+title+"_final_checkpoint.model"))
+        # now we can delete latest as it will be identical with final
+        if isfile(join(self.output_folder, "model_TRADES_latest.model")):
+            os.remove(join(self.output_folder, "model_TRADES_latest.model"))
+        if isfile(join(self.output_folder, "model_TRADES_latest.model.pkl")):
+            os.remove(join(self.output_folder, "model_TRADES_latest.model.pkl"))        
+
+    def run_TE_training(self, counter):
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+
+        _ = self.tr_gen.next()
+        _ = self.val_gen.next()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+        maybe_mkdir_p(self.output_folder)        
+        #ramp up function
+        def sigmoid_rampup(current, start_es, end_es):
+            """Exponential rampup from https://arxiv.org/abs/1610.02242"""
+            if current < start_es:
+                return 0.0
+            if current > end_es:
+                return 1.0
+            else:
+                import math
+                phase = 1.0 - (current - start_es) / (end_es - start_es)
+                return math.exp(-5.0 * phase * phase)
+        title = "TE"
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+        #config TE parameters
+        from nnunet.TE.loss import PGD_TE
+        task = self.dataset_directory.split("\\")[-1]
+        
+        epsilon = None
+        if "002" in task:
+            epsilon = 20#cannot converge
+        elif "004" in task:
+            epsilon = 15#cannot converge
+        elif "005" in task:
+            epsilon = 40#cannot converge
+        else:
+            raise Exception("Not supported task id")
+        
+        
+        pgd_te = PGD_TE(  loss_fn = self.loss,
+                           num_samples = counter,
+                           momentum=0.9,
+                           step_size=epsilon/4,
+                           epsilon= epsilon,
+                           perturb_steps=10,
+                           norm ='l2',
+                           es= 25)
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        while self.epoch < self.max_num_epochs:
+            self.print_to_log_file("\nepoch: ", self.epoch)
+            epoch_start_time = time()
+            train_losses_epoch = []
+            #----------------------------
+            # compute the weight
+            rampup_rate = sigmoid_rampup(self.epoch, 25, 35)
+            weight = rampup_rate * 300
+            self.network.train()
+            # train one iteration
+            for c in range(self.num_batches_per_epoch):
+                l = self.run_TE_iteration( pgd_te, self.tr_gen,  self.epoch, weight, True)
+                #print("batch ",c,"finished")
+                train_losses_epoch.append(l)
+            # one epoch finished
+            self.all_tr_losses.append(np.mean(train_losses_epoch))
+            self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
+            #------          
+            with torch.no_grad():
+                # validation with train=False
+                self.network.eval()
+                val_losses = []
+                # run one epoch.....
+                for b in range(self.num_val_batches_per_epoch):
+                    l = self.run_iteration(self.val_gen, False, True)
+                    val_losses.append(l)
+   
+                self.all_val_losses.append(np.mean(val_losses))
+                self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
+
+                if self.also_val_in_tr_mode:
+                    self.network.train()
+                    # validation with train=True
+                    val_losses = []
+                    for b in range(self.num_val_batches_per_epoch):
+                        l = self.run_iteration(self.val_gen, False)
+                        val_losses.append(l)
+                    self.all_val_losses_tr_mode.append(np.mean(val_losses))
+                    self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
+            
+
+            self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
+
+            continue_training = self.on_epoch_end()
+
+            epoch_end_time = time()
+
+            if not continue_training:
+                # allows for early stopping
+                break
+
+            self.epoch += 1
+            self.print_to_log_file("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
+
+        self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
+
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_"+title+"_final_checkpoint.model"))
+        # now we can delete latest as it will be identical with final
+        if isfile(join(self.output_folder, "model_TRADES_latest.model")):
+            os.remove(join(self.output_folder, "model_TRADES_latest.model"))
+        if isfile(join(self.output_folder, "model_TRADES_latest.model.pkl")):
+            os.remove(join(self.output_folder, "model_TRADES_latest.model.pkl"))
 
 
     def maybe_update_lr(self):
@@ -1595,7 +1799,7 @@ class NetworkTrainer(object):
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
         return validationDice, ret2
 #%% adversarial part   
-    def run_validate_adv_IFGSM(self, noise):
+    def run_validate_adv_IFGSM_old(self, noise):
         print ("+++++++++++++++++noise ",str(noise)," is running, (IFGSM)+++++++++++++++++++++++++++++++")
         if not torch.cuda.is_available():
             self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
@@ -1655,6 +1859,75 @@ class NetworkTrainer(object):
         epoch_end_time = time()
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
         return validationDice, ret2
+    
+#%%  
+    def run_validate_adv_IFGSM(self, noise):
+        print ("+++++++++++++++++noise ",str(noise)," is running, (IFGSM and PGD)+++++++++++++++++++++++++++++++")
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+
+        #_ = self.tr_gen.next()
+        #_ = self.val_gen.next()
+
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+      
+        #self.plot_network_architecture()
+
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        counter = 1
+        epoch_start_time = time()
+        # validation with train=False
+        self.network.eval()
+        #val_losses = []
+        #counter = 0
+        #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
+        avgIFGSM = []
+        avgPGD = []
+        for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue
+            
+            #finishe check
+            print ("IFGSM evaluating is running")
+            avgIFGSM.append(self.run_one_adv_ifgsm(data_dict, noise))
+            print ("PGD evaluatiing is running")
+            avgPGD.append(self.run_one_adv(data_dict, noise))
+            
+            if data_dict['last']:
+                break
+            #if counter ==20:
+            #    break
+            counter +=1
+
+        ret = self.my_finish_online_evaluation()
+        
+        avgPGD = np.concatenate(avgPGD)
+        resPGD = avgPGD.mean()
+        avgIFGSM = np.concatenate(avgIFGSM)
+        resIFGSM = avgIFGSM.mean()
+        #validationDice = np.mean(ret)
+        #self.print_to_log_file("av global foreground dice: ", ret)
+        self.print_to_log_file("AVG ifgsm", resIFGSM)
+        self.print_to_log_file("AVG pgd", resPGD)
+        #self.print_to_log_file("validation dice: %.4f" % validationDice)
+        epoch_end_time = time()
+        self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
+        return  resIFGSM, resPGD,
 #%% adversarial part   
     def run_validate_sample_wise(self, noise):
         print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")

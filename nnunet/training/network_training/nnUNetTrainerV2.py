@@ -18,8 +18,9 @@ from typing import Tuple
 
 import numpy as np
 import torch
+import torch.nn as nn
 from nnunet.training.data_augmentation.data_augmentation_moreDA import get_moreDA_augmentation
-from nnunet.training.loss_functions.deep_supervision import MultipleOutputLoss2
+from nnunet.training.loss_functions.deep_supervision import MultipleOutputLoss2, MultipleOutputLossKL
 from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
 from nnunet.network_architecture.generic_UNet import Generic_UNet
 from nnunet.network_architecture.initialization import InitWeights_He
@@ -35,9 +36,11 @@ from torch.cuda.amp import autocast
 from nnunet.training.learning_rate.poly_lr import poly_lr
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_loss
+from nnunet.TRADES.RobustDNN_TRADES import TRADES_loss
 from nnunet.training.loss_functions.dice_loss import My_DC_and_CE_loss
 from nnunet.training.loss_functions.dice_loss import MyDiceIndex
 from nnunet.IMA.PGD import pgd_attack
+
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
@@ -52,7 +55,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
                  unpack_data=True, deterministic=True, fp16=False):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
                          deterministic, fp16)
-        self.max_num_epochs =100
+        self.max_num_epochs =50
         self.initial_lr = 1e-2
         self.deep_supervision_scales = None
         self.ds_loss_weights = None
@@ -95,6 +98,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
             # now wrap the loss
             self.loss = MultipleOutputLoss2(self.loss, self.ds_loss_weights)
             self.loss2 = MultipleOutputLoss2(My_DC_and_CE_loss({'batch_dice': False, 'smooth': 1e-5, 'do_bg': False}, {}), self.ds_loss_weights)
+            self.loss_kl = MultipleOutputLossKL(nn.KLDivLoss(), self.ds_loss_weights)
             ################# END ###################
 
             self.folder_with_preprocessed_data = join(self.dataset_directory, self.plans['data_identifier'] +
@@ -333,7 +337,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Yp_e_Y=(dice>=0)
         return Yp_e_Y
     #
-    def classify_model_adv_output_seg(self,Ypn, Y):
+    def classify_model_adv_output_seg(self,Ypn, Y, task):
         #Y could be Ytrue or Ypred
         #valDice = MyDiceIndex(batch_dice=False)
         Yp = Ypn[0]
@@ -344,8 +348,17 @@ class nnUNetTrainerV2(nnUNetTrainer):
         # D2: avg mean: 0.9114448;
         # D4: avg mean: 0.8065869;
         # D5: avg mean: 0.86081946;
-        
-        Ypn_e_Y=(dice>=0.8065869)
+        threshold = 0
+        if task.task == "002":
+            threshold = 0.9114448
+        if task.task == "005":
+            threshold = 0.86081946
+        if task.task == "004":
+            threshold = 0.8065869
+        if task.stop != 0:
+            threshold = 0.60
+        #print ("the task for threshould is ",threshold,"+++++++++++++++++++++++++++++++++++++")
+        Ypn_e_Y=(dice>=threshold)
         return Ypn_e_Y
     
     def run_model_std_seg(self, model, X, Y=None, return_loss=False, reduction='none'):
@@ -464,7 +477,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         #del data
         #l = self.loss(output, target)
         # loss should compare output[0] and target[0]
-        loss, loss1, loss2, loss3, Yp, advc, Xn, Ypn, idx_n = IMA_loss(self.network, data, Y=target,#Y is a tuple
+        loss, loss1, loss2, loss3, Yp, advc, Xn, Ypn, idx_n = IMA_loss(args, self.network, data, Y=target,#Y is a tuple
                                                                        norm_type=args.norm_type,
                                                                        rand_init_norm=rand_init_norm,
                                                                        margin=margin,
@@ -510,6 +523,118 @@ class nnUNetTrainerV2(nnUNetTrainer):
         del target
 
         return loss.detach().cpu().numpy(), flag1, flag2, E_new
+
+
+    def run_TRADES_iteration(self, data_generator, do_backprop=True, run_online_evaluation=False):
+        """
+        gradient clipping improves training stability
+
+        :param data_generator:
+        :param do_backprop:
+        :param run_online_evaluation:
+        :return:
+        """
+        task = self.dataset_directory.split("\\")[-1]
+        
+        epsilon = None
+        if "002" in task:
+            epsilon = 20#cannot converge
+            #epsilon = 5
+        elif "004" in task:
+            epsilon = 15#cannot converge
+            #epsilon = 0.5
+        elif "005" in task:
+            epsilon = 40#cannot converge
+            #epsilon = 10
+        
+        data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']
+
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.network.zero_grad()
+        #print ("epsilon is ", epsilon)
+        loss, _, _ = TRADES_loss(self.network,
+                            self.loss,
+                            self.loss_kl,
+                            data,
+                            target,
+                            self.optimizer,
+                            step_size = epsilon/5,
+                            epsilon= epsilon,
+                            perturb_steps= 10,
+                            beta = 6,
+                            distance='l_2')
+        loss.backward()      
+        torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+        #--------------------
+
+        self.optimizer.step()
+        #--------------------
+
+        if run_online_evaluation:
+            self.run_online_evaluation(Yp, target)
+
+        del target
+
+        return loss.detach().cpu().numpy()
+
+    def run_TE_iteration(self, pgd_te, data_generator, epoch, weight, do_backprop=True, run_online_evaluation=False):
+        """
+        gradient clipping improves training stability
+
+        :param data_generator:
+        :param do_backprop:
+        :param run_online_evaluation:
+        :return:
+        """
+        task = self.dataset_directory.split("\\")[-1]
+        
+        epsilon = None
+        if "002" in task:
+            epsilon = 20#cannot converge
+            #epsilon = 5
+        elif "004" in task:
+            epsilon = 15#cannot converge
+            #epsilon = 0.5
+        elif "005" in task:
+            epsilon = 40#cannot converge
+            #epsilon = 10
+        
+        data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']
+        idx = torch.tensor(data_dict['id'])
+
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.network.zero_grad()
+        #print ("epsilon is ", epsilon)
+        loss = pgd_te(data, target, idx, epoch, self.network, self.optimizer, weight)
+        loss.backward()      
+        torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+        #--------------------
+
+        self.optimizer.step()
+        #--------------------
+
+        if run_online_evaluation:
+            self.run_online_evaluation(Yp, target)
+
+        del target
+
+        return loss.detach().cpu().numpy()
 
 
     def do_split(self):
@@ -753,6 +878,39 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ds = self.network.do_ds
         self.network.do_ds = True
         ret = super().run_IMA_training(self.dl_tr.counter)#pass the number of samples in training set
+        self.network.do_ds = ds
+        return ret
+ 
+    
+    def run_TE_training(self):
+        """
+        if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
+        continued epoch with self.initial_lr
+
+        we also need to make sure deep supervision in the network is enabled for training, thus the wrapper
+        :return:
+        """
+        self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we
+        # want at the start of the training
+        ds = self.network.do_ds
+        self.network.do_ds = True
+        ret = super().run_TE_training(self.dl_tr.counter)#pass the number of samples in training set
+        self.network.do_ds = ds
+        return ret 
+    
+    def run_TRADES_training(self):
+        """
+        if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
+        continued epoch with self.initial_lr
+
+        we also need to make sure deep supervision in the network is enabled for training, thus the wrapper
+        :return:
+        """
+        self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we
+        # want at the start of the training
+        ds = self.network.do_ds
+        self.network.do_ds = True
+        ret = super().run_TRADES_training(self.dl_tr.counter)#pass the number of samples in training set
         self.network.do_ds = ds
         return ret
   

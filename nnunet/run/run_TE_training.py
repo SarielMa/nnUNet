@@ -18,7 +18,7 @@ curDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())
 curDir = os.path.dirname(curDir)
 curDir = os.path.dirname(curDir)
 sys.path.insert(0, curDir)
-
+import torch
 import argparse
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.run.default_configuration import get_default_configuration
@@ -29,22 +29,13 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetTrainerCascadeFullRes
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
-import matplotlib.pyplot as plt
-import numpy as np
-import csv
-import torch
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
 
-def main(noise, filename, taskid):
+def main():
     parser = argparse.ArgumentParser()
-    """
-    parser.add_argument("network")
-    parser.add_argument("network_trainer")
-    parser.add_argument("task", help="can be task name or task id")
-    parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
-    """
+    parser.add_argument("--task", type = str, default = "004", help="can be task name or task id")    
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
@@ -88,13 +79,6 @@ def main(noise, filename, taskid):
                              "running postprocessing on each fold is computationally cheap, but some users have "
                              "reported issues with very large images. If your images are large (>600x600x600 voxels) "
                              "you should consider setting this flag.")
-    # parser.add_argument("--interp_order", required=False, default=3, type=int,
-    #                     help="order of interpolation for segmentations. Testing purpose only. Hands off")
-    # parser.add_argument("--interp_order_z", required=False, default=0, type=int,
-    #                     help="order of interpolation along z if z is resampled separately. Testing purpose only. "
-    #                          "Hands off")
-    # parser.add_argument("--force_separate_z", required=False, default="None", type=str,
-    #                     help="force_separate_z resampling. Can be None, True or False. Testing purpose only. Hands off")
     parser.add_argument('--val_disable_overwrite', action='store_false', default=True,
                         help='Validation does not overwrite existing segmentations')
     parser.add_argument('--disable_next_stage_pred', action='store_true', default=False,
@@ -103,62 +87,42 @@ def main(noise, filename, taskid):
                         help='path to nnU-Net checkpoint file to be used as pretrained model (use .model '
                              'file, for example model_final_checkpoint.model). Will only be used when actually training. '
                              'Optional. Beta. Use with caution.')
-
+    
+    parser.add_argument('--cuda_id', type=str, required=False, default="1")
+    
     args = parser.parse_args()
-    """
+    
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"]=args.cuda_id    
+    
+    
+        
     task = args.task
-    fold = args.fold
-    network = args.network
-    network_trainer = args.network_trainer
-    """
-    task = taskid
     fold = "0"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"
-    #validation_only = args.validation_only
-    validation_only = False
+    validation_only = args.validation_only
     plans_identifier = args.p
     find_lr = args.find_lr
     disable_postprocessing_on_folds = args.disable_postprocessing_on_folds
-
     use_compressed_data = args.use_compressed_data
     decompress_data = not use_compressed_data
-
     deterministic = args.deterministic
     valbest = args.valbest
-
     fp32 = args.fp32
     run_mixed_precision = not fp32
-
     val_folder = args.val_folder
-    # interp_order = args.interp_order
-    # interp_order_z = args.interp_order_z
-    # force_separate_z = args.force_separate_z
-
     if not task.startswith("Task"):
         task_id = int(task)
         task = convert_id_to_task_name(task_id)
-
     if fold == 'all':
         pass
     else:
         fold = int(fold)
-
-    # if force_separate_z == "None":
-    #     force_separate_z = None
-    # elif force_separate_z == "False":
-    #     force_separate_z = False
-    # elif force_separate_z == "True":
-    #     force_separate_z = True
-    # else:
-    #     raise ValueError("force_separate_z must be None, True or False. Given: %s" % force_separate_z)
-
     plans_file, output_folder_name, dataset_directory, batch_dice, stage, \
     trainer_class = get_default_configuration(network, task, network_trainer, plans_identifier)
-
     if trainer_class is None:
         raise RuntimeError("Could not find trainer class in nnunet.training.network_training")
-
     if network == "3d_cascade_fullres":
         assert issubclass(trainer_class, (nnUNetTrainerCascadeFullRes, nnUNetTrainerV2CascadeFullRes)), \
             "If running 3d_cascade_fullres then your " \
@@ -167,7 +131,6 @@ def main(noise, filename, taskid):
     else:
         assert issubclass(trainer_class,
                           nnUNetTrainer), "network_trainer was found but is not derived from nnUNetTrainer"
-    # e.g. nnUNetTrainerV2
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
@@ -179,94 +142,38 @@ def main(noise, filename, taskid):
         trainer.save_intermediate_checkpoints = True  # whether or not to save checkpoint_latest. We need that in case
         # the training chashes
         trainer.save_latest_only = True  # if false it will not store/overwrite _latest but separate files each
+    trainer.initialize(not validation_only)
+    if find_lr:
+        trainer.find_lr()
+    else:
+        if not validation_only:
+            if args.continue_training:
+                # -c was set, continue a previous training and ignore pretrained weights
+                trainer.load_latest_checkpoint()
+            elif (not args.continue_training) and (args.pretrained_weights is not None):
+                # we start a new training. If pretrained_weights are set, use them
+                load_pretrained_weights(trainer.network, args.pretrained_weights)
+            else:
+                # new training without pretraine weights, do nothing
+                pass
+            trainer.run_TE_training()
+        else:
+            if valbest:
+                trainer.load_best_checkpoint(train=False)
+            else:
+                trainer.load_final_checkpoint(train=False)
 
-    trainer.initialize(training = not validation_only)#only validate it
+        trainer.network.eval()
 
+        # predict validation
+        trainer.validate(save_softmax=args.npz, validation_folder_name=val_folder,
+                         run_postprocessing_on_folds=not disable_postprocessing_on_folds,
+                         overwrite=args.val_disable_overwrite)
 
-    trainer.my_load_final_checkpoint(filename, train=False)
-    return trainer.run_validate_adv(noise)
-    
-def get_filename(net_name, loss_name, epoch=None, pre_fix='result/CIFAR10_'):
-    filename=pre_fix+net_name+'_'+loss_name+'_epoch'+str(epoch)
-    return filename
+        if network == '3d_lowres' and not args.disable_next_stage_pred:
+            print("predicting segmentations for the next stage of the cascade")
+            predict_next_stage(trainer, join(dataset_directory, trainer.plans['data_identifier'] + "_stage%d" % 1))
 
-def get_avgDice(name, modelPath, noises, dataset):    
-    filename=get_filename(name, "Dice", "50",pre_fix='result/')
-    result_100pgd=[]
-    for noise in noises:
-        voxelDice,avgDice = main(noise, modelPath, selected[4:7]) 
-        result = {}
-        result["noise"] = noise
-        result["avgDice"] = avgDice
-        result["voxelDice"] = voxelDice
-        result_100pgd.append(result)
-        
-    filename=filename+'_result_wba_L2_'+dataset+'.pt'
-    torch.save({'result_100pgd':result_100pgd}, filename)
-    print('saved:', filename)
-
-def run_it(deltas, noises, basePath, selected ):
-    for delta in deltas:  
-        mn1 = "model_AMAT"
-        task = selected[4:7]
-        mn2 = "_N_"
-     
-        mn3 = "_D_"
-  
-        mn4 = "_final_checkpoint.model"  
-        model = mn1+str(task)+mn2+str(float("inf"))+mn3+str(delta)+mn4 
-        name = mn1+str(task)+mn2+str(float("inf"))+mn3+str(delta)
-        print ("the delta ", delta, " is running############################################")
-        get_avgDice(name, join(basePath, model), noises, task)
 
 if __name__ == "__main__":
-    
-    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
-    os.environ["CUDA_VISIBLE_DEVICES"]="1"
-    
-    import random
-    random.seed(10)
-    ##########################need to be configured############################
-    #base = "C:/Research/IMA_on_segmentation"
-    base = "C:/Research/IMA_on_segmentation/nnUnet/nnUNet/resultFolder/nnUNet/2d/"
-    choice = 2
-    ###########################################################################
-    #dataset name
-    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
-    selected = dataset[choice]
-    
-    # noise name
-    noiseDict =[[0,5,10,15],#D2
-                [0,2,4,6,8,10],#D4 
-                [0,10,20,40],#D5
-                ]
-    noises = noiseDict[choice]
-    #methods names
-    #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
-    
-    #
-    folderDict = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate" ]
-    folder = folderDict[choice]
-    
-    
-    model = ""
-    suffix = "/nnUNetTrainerV2__nnUNetPlansv2.1/fold_1/"
-    basePath = base+folder+suffix
-
-    deltaDict = [[1,3,5,7,9],
-                 [0.1,0.3,0.7,0.9,1.1,1.3,1.7,1.9],
-                 [1,3,5,7,9,11,13,15,17,19,21]]     
-    deltas = deltaDict[choice]          
-                
-                
-    run_it(deltas, noises, basePath, selected)
-
-                
-
-
-    
-
-    
-
-
-   
+    main()

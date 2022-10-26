@@ -214,15 +214,15 @@ def main(params):
 
 
 
-class IMA_params:# for D2 
-    def __init__(self, noise, delta):           
+class IMA_params_D2:# for D2 
+    def __init__(self, delta, noise = float("inf")):           
         #used to pass parameters to ima iteration
         self.task = "002"
         self.noise = noise #25
         self.norm_type = 2
         self.alpha = 4
         self.max_iter = 20
-        self.stop = 1
+        self.stop = 0
         self.refine_Xn_max_iter = 10
         self.beta = 0.5
         self.beta_position =1
@@ -235,7 +235,7 @@ class IMA_params:# for D2
         self.Xn1_equal_X =0
         self.Xn2_equal_Xn =0
         self.pgd_replace_Y_with_Yp=0   
-        self.title = "IMA"+self.task
+        self.title = "AMAT"+self.task
 
 class IMA_params_D4:# for D4
     def __init__(self, delta, noise = float("inf")):           
@@ -261,14 +261,14 @@ class IMA_params_D4:# for D4
         self.title = "AMAT"+self.task
         
 class IMA_params_D5:# for D5
-    def __init__(self, noise, delta):           
+    def __init__(self, delta, noise = float("inf")):           
         #used to pass parameters to ima iteration
         self.task = "005"
         self.noise = noise #40
         self.norm_type = 2
         self.alpha = 4
         self.max_iter = 20
-        self.stop = 1 #0 for AMAT and 1 for IMA
+        self.stop = 0 #0 for AMAT and 1 for IMA
         self.refine_Xn_max_iter = 10
         self.beta = 0.5
         self.beta_position =1
@@ -281,7 +281,7 @@ class IMA_params_D5:# for D5
         self.Xn1_equal_X =0
         self.Xn2_equal_Xn =0
         self.pgd_replace_Y_with_Yp=0 
-        self.title = "IMA"+self.task
+        self.title = "AMAT"+self.task
 
 if __name__ == "__main__":
     #os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(f'{i}' for i in range(torch.cuda.device_count()))
@@ -292,23 +292,21 @@ if __name__ == "__main__":
 
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"]="1"
-    # D2
-    """
-    for noise in [15,20,25,30,35]:
-        for delta in [3,4,5,6,7]:
-            main(IMA_params(noise, delta))
-    """     
-    # D4
-    # 2.5 is the one on the amat paper
-    for delta in [0.1,0.3,0.7,0.9,1.1,1.3,1.7,1.9]:
-        main(IMA_params_D4( delta))
-    """
-
+    
+    choice  = 2
+    if choice == 0:
+        # D2
+        for delta in [1,3,5,7,9]:
+            main(IMA_params_D2( delta)) 
+    if choice == 1:
+        # D4
+        # 2.5 is the one on the amat paper
+        for delta in [0.1,0.3,0.7,0.9,1.1,1.3,1.7,1.9]:
+            main(IMA_params_D4( delta))
     # D5
-    for noise in [20,30,40,50,60]:
-        for delta in [5,7.5,10,12.5,15]:
-            main(IMA_params_D5(noise, delta))
-    """
+    if choice == 2:
+        for delta in [17,19,21]:
+            main(IMA_params_D5( delta))
     
 """
     class IMA_params_D2:# for D2 
