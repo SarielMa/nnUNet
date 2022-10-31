@@ -161,15 +161,13 @@ class AutoAttack():
             
             for attack in self.attacks_to_run:
                 # item() is super important as pytorch int division uses floor rounding
-                num_robust = torch.sum(robust_flags).item()
-
-                n_batches = int(np.ceil(num_robust / bs))
+                n_batches = int(np.ceil( x_orig.shape[0]/ bs))
                 robust_lin_idcs = torch.nonzero(robust_flags, as_tuple=False)
 
                 
                 for batch_idx in range(n_batches):
                     start_idx = batch_idx * bs
-                    end_idx = min((batch_idx + 1) * bs, num_robust)
+                    end_idx = min((batch_idx + 1) * bs, x_orig.shape[0])
 
                     batch_datapoint_idcs = robust_lin_idcs[start_idx:end_idx]
                     if len(batch_datapoint_idcs.shape) > 1:
