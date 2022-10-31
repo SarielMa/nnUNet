@@ -416,7 +416,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         Xn = pgd_attack(self.network, data, target, args.noise, args.norm_type, args.max_iter, args.step, loss_fn=self.loss)
         Zn = self.network(Xn)
         loss_N = self.loss(Zn, target)
-        loss = 0.5*loss_N + 0.5*loss_P
+        loss = loss_N 
         loss.backward()
         # do the back propagation
         torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
@@ -596,16 +596,6 @@ class nnUNetTrainerV2(nnUNetTrainer):
         """
         task = self.dataset_directory.split("\\")[-1]
         
-        epsilon = None
-        if "002" in task:
-            epsilon = 20#cannot converge
-            #epsilon = 5
-        elif "004" in task:
-            epsilon = 15#cannot converge
-            #epsilon = 0.5
-        elif "005" in task:
-            epsilon = 40#cannot converge
-            #epsilon = 10
         
         data_dict = next(data_generator)
         data = data_dict['data']
@@ -834,7 +824,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         self.network.do_ds = ds
         return ret,ret2
     
-    def run_validate_adv(self, noise):
+    def run_validate_adv(self, noise, norm_type):
         """
         if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
         continued epoch with self.initial_lr
@@ -846,7 +836,23 @@ class nnUNetTrainerV2(nnUNetTrainer):
         # want at the start of the training
         ds = self.network.do_ds
         self.network.do_ds = True
-        ret, ret2 = super().run_validate_adv(noise)
+        ret, ret2 = super().run_validate_adv(noise, norm_type)
+        self.network.do_ds = ds
+        return ret,ret2
+    
+    def run_validate_white(self, noise, norm_type):
+        """
+        if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
+        continued epoch with self.initial_lr
+
+        we also need to make sure deep supervision in the network is enabled for training, thus the wrapper
+        :return:
+        """
+        self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we
+        # want at the start of the training
+        ds = self.network.do_ds
+        self.network.do_ds = True
+        ret, ret2 = super().run_validate_white(noise, norm_type)
         self.network.do_ds = ds
         return ret,ret2
     

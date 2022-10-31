@@ -29,11 +29,14 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetTrainerCascadeFullRes
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
+import matplotlib.pyplot as plt
+import numpy as np
+import csv
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
 
-def main():
+def main(noise, filename, taskid, white, norm_type):
     parser = argparse.ArgumentParser()
     """
     parser.add_argument("network")
@@ -41,8 +44,7 @@ def main():
     parser.add_argument("task", help="can be task name or task id")
     parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
     """
-    parser.add_argument("--task", type = str, default = "004", help="can be task name or task id")
-    parser.add_argument('--cuda_id', type=str, required=False, default="1")
+    #parser.add_argument("-norm", "--norm_type",type=str, default = "Linf", action="store_true")
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
@@ -103,20 +105,18 @@ def main():
                              'Optional. Beta. Use with caution.')
 
     args = parser.parse_args()
-    
-    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
-    os.environ["CUDA_VISIBLE_DEVICES"]=args.cuda_id 
     """
-    
+    task = args.task
     fold = args.fold
     network = args.network
     network_trainer = args.network_trainer
     """
-    task = args.task
+    task = taskid
     fold = "0"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"
-    validation_only = args.validation_only
+    #validation_only = args.validation_only
+    validation_only = False
     plans_identifier = args.p
     find_lr = args.find_lr
     disable_postprocessing_on_folds = args.disable_postprocessing_on_folds
@@ -167,7 +167,7 @@ def main():
     else:
         assert issubclass(trainer_class,
                           nnUNetTrainer), "network_trainer was found but is not derived from nnUNetTrainer"
-
+    # e.g. nnUNetTrainerV2
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
@@ -180,40 +180,203 @@ def main():
         # the training chashes
         trainer.save_latest_only = True  # if false it will not store/overwrite _latest but separate files each
 
-    trainer.initialize(not validation_only)
+    trainer.initialize(training = not validation_only)#only validate it
 
-    if find_lr:
-        trainer.find_lr()
-    else:
-        if not validation_only:
-            if args.continue_training:
-                # -c was set, continue a previous training and ignore pretrained weights
-                trainer.load_latest_checkpoint()
-            elif (not args.continue_training) and (args.pretrained_weights is not None):
-                # we start a new training. If pretrained_weights are set, use them
-                load_pretrained_weights(trainer.network, args.pretrained_weights)
-            else:
-                # new training without pretraine weights, do nothing
-                pass
 
-            trainer.run_PGD_training()
-        else:
-            if valbest:
-                trainer.load_best_checkpoint(train=False)
-            else:
-                trainer.load_final_checkpoint(train=False)
+    trainer.my_load_final_checkpoint(filename, train=False)
+    if white:# white noise
+        return trainer.run_validate_white(noise, norm_type)
+    else: #pgd
+        return trainer.run_validate_adv(noise, norm_type)
+    
+      
 
-        trainer.network.eval()
 
-        # predict validation
-        trainer.validate(save_softmax=args.npz, validation_folder_name=val_folder,
-                         run_postprocessing_on_folds=not disable_postprocessing_on_folds,
-                         overwrite=args.val_disable_overwrite)
-
-        if network == '3d_lowres' and not args.disable_next_stage_pred:
-            print("predicting segmentations for the next stage of the cascade")
-            predict_next_stage(trainer, join(dataset_directory, trainer.plans['data_identifier'] + "_stage%d" % 1))
 
 
 if __name__ == "__main__":
-    main()
+    
+    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"]="2"
+    
+    import random
+    random.seed(10)
+    ##########################need to be configured############################
+    base = "C:/Research/IMA_on_segmentation"
+    choice = 1
+    
+    ###########################################################################
+    #dataset name
+    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
+    selected = dataset[choice]
+    # noise name
+    #methods names
+    #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
+    netDict = [["IMA", "TRADES","TE","PGD","STD"],#D2
+                ["STD","IMA", "TRADES","TE","PGD"],#D4
+                ["IMA", "TRADES","TE","PGD","STD"],#D5
+                ]
+        
+    nets = netDict[choice]
+    #
+    folderDict = []
+    
+    #D2
+    folders2 = ["result_CBM/002/model_IMA002_N_20_D_5_final_checkpoint.model",               
+               "result_CBM/002/TRADES002.model",
+               "result_CBM/002/model_TE_final_checkpoint.model",
+               "result_CBM/002/model_PGD20_final_checkpoint.model",
+               "result_CBM/002/model_final_checkpoint.model"]
+    
+    #D2
+    folders4 = ["result_CBM/004/model_final_checkpoint.model",
+                "result_CBM/004/model_IMA004_N_15_D_2.0_final_checkpoint.model",               
+               "result_CBM/004/TRADES004.model",
+               "result_CBM/004/model_TE_final_checkpoint.model",
+               "result_CBM/004/model_PGD15_final_checkpoint.model"]
+    
+    #D2
+    folders5 = ["result_CBM/005/model_IMA005_N_40_D_10_final_checkpoint.model",               
+               "result_CBM/005/TRADES005.model",
+               "result_CBM/005/model_TE_final_checkpoint.model",
+               "result_CBM/005/model_PGD40_final_checkpoint.model",
+               "result_CBM/005/model_final_checkpoint.model"]
+
+    folderDict.append(folders2)
+    folderDict.append(folders4)
+    folderDict.append(folders5)
+    folders = folderDict[choice]
+    import os
+    for model in folders:
+        assert os.path.exists(model)
+    #basePath = base+"/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
+    for norm_type in ['L2', 'Linf']: 
+        
+        if norm_type == 'Linf':
+            noiseDict =[[0, 2/255, 4/255, 8/255],#D2
+                        [0, 2/255, 4/255, 8/255],#D4 
+                        [0, 2/255, 4/255, 8/255]]#D5 
+        else:
+            noiseDict =[[0, 10, 20, 30],#D2
+                        [5, 15, 25],#D4 
+                        [0, 10, 25, 40]]#D5             
+        noises = noiseDict[choice]
+        print ("PGD validation")
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111)
+        fig2 = plt.figure(figsize=(10, 8))
+        ax2 = fig2.add_subplot(111)    
+        cols = ['b','g','r','y','k','m','c']
+        yAxises = []
+        yAxises2 = []
+        fields = ["noise"]+[str(i) for i in noises]
+        rows1 = []
+        rows2 = []
+        for i, net in enumerate(nets):
+            print ("++++++++++++++++++the net is ", net,"++++++++++++++++++++++++++++++")
+            for noise in noises:
+                vixelDice,avgDice = main(noise, folders[i], selected[4:7], False, norm_type) 
+                yAxises.append(vixelDice)
+                yAxises2.append(avgDice)
+            ax.plot(noises, yAxises, color=cols[i], label=nets[i])
+            rows1.append([net]+[str(round(i,4)) for i in yAxises])
+            ax2.plot(noises, yAxises2, color=cols[i], label=nets[i])
+            rows2.append([net]+[str(round(i,4)) for i in yAxises2])
+            yAxises = []
+            yAxises2=[]
+    
+        
+        """
+        ax.set_title(selected)
+        ax.set_xlabel("noise(Linf)")
+        ax.set_ylabel("AVG Dice Index")
+        ax.set_ylim(0,1)
+        ax.set_yticks(np.arange(0, 1.05, step=0.05))
+        ax.legend()
+        ax.grid(True)
+        fig.savefig("V_Dice_result_pgd_"+selected+".pdf",bbox_inches='tight')
+        """
+        with open("V_Dice_result_auto_L"+norm_type+"_"+selected+".csv",'w') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(fields)
+            csvwriter.writerows(rows1)
+        """
+        ax2.set_title(selected)
+        ax2.set_xlabel("noise(Linf)")
+        ax2.set_ylabel("AVG Dice Index")
+        ax2.set_ylim(0,1)
+        ax2.set_yticks(np.arange(0, 1.05, step=0.05))
+        ax2.legend()
+        ax2.grid(True)
+        fig2.savefig("AVG_Dice_result_pgd_"+selected+".pdf",bbox_inches='tight')    
+        """
+        with open("AVG_Dice_result_auto_L"+norm_type+"_"+selected+".csv",'w') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(fields)
+            csvwriter.writerows(rows2)    
+        
+    #%%
+    
+    
+        print("white validation")
+        if norm_type == "Linf":
+            noiseDict =[[0, 32/255, 64/255, 128/255],#D2
+                        [0, 32/255, 64/255, 128/255],#D4 
+                        [0, 32/255, 64/255, 128/255]]#D5 
+        else:
+            noiseDict =[[0, 10, 20, 30],#D2
+                        [0, 5, 15, 25],#D4 
+                        [0, 10, 25, 40]]#D5             
+        noises = noiseDict[choice]  
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111)
+        fig2 = plt.figure(figsize=(10, 8))
+        ax2 = fig2.add_subplot(111)    
+        cols = ['b','g','r','y','k','m','c']
+        yAxises = []
+        yAxises2 = []
+        fields = ["noise"]+[str(i) for i in noises]
+        rows1 = []
+        rows2 = []
+        for i, net in enumerate(nets):
+            print ("++++++++++++++++++the net is ", net,"++++++++++++++++++++++++++++++")
+            for noise in noises:
+                vixelDice,avgDice = main(noise, folders[i], selected[4:7], True, norm_type) 
+                yAxises.append(vixelDice)
+                yAxises2.append(avgDice)
+            ax.plot(noises, yAxises, color=cols[i], label=nets[i])
+            rows1.append([net]+[str(round(i,4)) for i in yAxises])
+            ax2.plot(noises, yAxises2, color=cols[i], label=nets[i])
+            rows2.append([net]+[str(round(i,4)) for i in yAxises2])
+            yAxises = []
+            yAxises2=[]
+    
+        
+        """
+        ax.set_title(selected)
+        ax.set_xlabel("noise(Linf)")
+        ax.set_ylabel("AVG Dice Index")
+        ax.set_ylim(0,1)
+        ax.set_yticks(np.arange(0, 1.05, step=0.05))
+        ax.legend()
+        ax.grid(True)
+        fig.savefig("V_Dice_result_white_"+selected+".pdf",bbox_inches='tight')
+        """
+        with open("V_Dice_result_auto_L"+norm_type+"_"+selected+".csv",'w') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(fields)
+            csvwriter.writerows(rows1)
+        """
+        ax2.set_title(selected)
+        ax2.set_xlabel("noise(Linf)")
+        ax2.set_ylabel("AVG Dice Index")
+        ax2.set_ylim(0,1)
+        ax2.set_yticks(np.arange(0, 1.05, step=0.05))
+        ax2.legend()
+        ax2.grid(True)
+        fig2.savefig("AVG_Dice_result_white_"+selected+".pdf",bbox_inches='tight')    
+        """
+        with open("AVG_Dice_result_auto_L"+norm_type+"_"+selected+".csv",'w') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(fields)
+            csvwriter.writerows(rows2)       

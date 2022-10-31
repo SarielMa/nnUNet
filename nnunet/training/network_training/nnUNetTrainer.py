@@ -341,9 +341,14 @@ class nnUNetTrainer(NetworkTrainer):
         self.save_debug_information()
         super(nnUNetTrainer, self).run_PGD_training()
         
-    def run_validate_adv(self, noise):
+    def run_validate_adv(self, noise, norm_type):
         self.save_debug_information()
-        return super(nnUNetTrainer, self).run_validate_adv(noise)
+        return super(nnUNetTrainer, self).run_validate_adv(noise, norm_type)
+    
+
+    def run_validate_white(self, noise, norm_type):
+        self.save_debug_information()
+        return super(nnUNetTrainer, self).run_validate_white(noise, norm_type)
     
     def run_validate_adv_IFGSM(self, noise):
         self.save_debug_information()
@@ -770,11 +775,11 @@ class nnUNetTrainer(NetworkTrainer):
                 fn_hard[:, c - 1] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
                 
             #filter out those whose target lacks classes==================================     
-            good_idx = self.my_filter_out(target, num_classes) 
+            #good_idx = self.my_filter_out(target, num_classes) 
             
-            tp_hard = tp_hard[good_idx]
-            fp_hard = fp_hard[good_idx]
-            fn_hard = fn_hard[good_idx]
+            #tp_hard = tp_hard[good_idx]
+            #fp_hard = fp_hard[good_idx]
+            #fn_hard = fn_hard[good_idx]
             #=========================================================================
 
             tp_hard = tp_hard.sum(0, keepdim=False).detach().cpu().numpy()

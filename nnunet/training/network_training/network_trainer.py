@@ -42,6 +42,8 @@ from nnunet.utilities.nd_softmax import softmax_helper
 from nnunet.IMA.RobustDNN_IMA_claregseg import IMA_update_margin
 import os.path
 from nnunet.utilities.nd_softmax import softmax_helper
+from nnunet.autoattackfornnunet.autoattack import AutoAttack
+#from nnunet.autoattacklib.autoattack.autoattack import AutoAttack
 #from Evaluate_advertorch import test_adv
 
 def maybe_mkdir_p(directory: str) -> None:
@@ -558,7 +560,16 @@ class NetworkTrainer(object):
     class PGD_params_D2:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 150.0
+            self.noise = 20
+            self.norm_type = 2
+            self.max_iter = 20
+            self.step = 4*self.noise/self.max_iter
+            self.title = "PGD"
+            
+    class PGD_params_D4:
+        def __init__(self):           
+            #used to pass parameters to ima iteration
+            self.noise = 15
             self.norm_type = 2
             self.max_iter = 20
             self.step = 4*self.noise/self.max_iter
@@ -567,16 +578,7 @@ class NetworkTrainer(object):
     class PGD_params_D5:
         def __init__(self):           
             #used to pass parameters to ima iteration
-            self.noise = 240.0
-            self.norm_type = 2
-            self.max_iter = 20
-            self.step = 4*self.noise/self.max_iter
-            self.title = "PGD"
-            
-    class PGD_params:
-        def __init__(self):           
-            #used to pass parameters to ima iteration
-            self.noise = 5
+            self.noise = 40
             self.norm_type = 2
             self.max_iter = 20
             self.step = 4*self.noise/self.max_iter
@@ -600,7 +602,18 @@ class NetworkTrainer(object):
 
         # config IMA parameters
         #######################################################################################
-        args = self.PGD_params()
+        task = self.dataset_directory.split("\\")[-1]
+        
+        args = None
+        if "002" in task:
+            args = self.PGD_params_D2()
+        elif "004" in task:
+            args = self.PGD_params_D4()
+        elif "005" in task:
+            args = self.PGD_params_D5()
+        else:
+            raise Exception("Not supported task id")
+        
         #args.E=args.delta*torch.ones(counter, dtype=torch.float32)
         #E_new=args.E.detach().clone()
         #######################################################################################
@@ -1020,15 +1033,17 @@ class NetworkTrainer(object):
         else:
             raise Exception("Not supported task id")
         
-        
+        es_start = 25
+        es_end = 35
         pgd_te = PGD_TE(  loss_fn = self.loss,
+                           multioutput_weights = self.ds_loss_weights,
                            num_samples = counter,
                            momentum=0.9,
                            step_size=epsilon/4,
                            epsilon= epsilon,
                            perturb_steps=10,
                            norm ='l2',
-                           es= 25)
+                           es= es_start)
 
         if not self.was_initialized:
             self.initialize(True)
@@ -1039,7 +1054,7 @@ class NetworkTrainer(object):
             train_losses_epoch = []
             #----------------------------
             # compute the weight
-            rampup_rate = sigmoid_rampup(self.epoch, 25, 35)
+            rampup_rate = sigmoid_rampup(self.epoch, es_start, es_end)
             weight = rampup_rate * 300
             self.network.train()
             # train one iteration
@@ -1464,6 +1479,9 @@ class NetworkTrainer(object):
                 raise NotImplementedError("not implemented.")
         return x_grad
     
+    def uniform_white_attack(self, ):
+        pass
+    
     def pgd_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
                    rand_init=True, rand_init_norm=None, targeted=False,
                    clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
@@ -1506,7 +1524,7 @@ class NetworkTrainer(object):
                 noise_new = Xnew-X
             #---------------------
             self.clip_norm_(noise_new, norm_type, noise_norm)
-            #Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+            Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
             Xn = X+noise_new
             noise_new.data -= noise_new.data-(Xn-X).data
             Xn=Xn.detach()
@@ -1555,24 +1573,14 @@ class NetworkTrainer(object):
         #---------------------------
         return Xn
 #%% adversarial part
-    """
-    def dice(self,Mp, M, reduction='none'):
-        # NxKx320x320
-        intersection = (Mp*M).sum(dim=(2,3))
-        dice = (2*intersection) / (Mp.sum(dim=(2,3)) + M.sum(dim=(2,3)))
-        if reduction == 'mean':
-            dice = dice.mean()
-        return dice
-    def dice_loss(self,Zn, Y):
-        return 1-self. dice(Zn, Y, 'mean')
-    """
+
     def maskIt(self, x):
         ma = x.max()
         mi = x.min()
         x = (x-mi)/(ma-mi)
         return x    
     
-    def run_one_adv(self, data_dict, noise):
+    def run_one_adv_pgd100(self, data_dict, noise):
         self.network.eval()
         #data_dict = next(data_generator)
         data = data_dict['data']
@@ -1589,13 +1597,96 @@ class NetworkTrainer(object):
         if noise == 0:
             Xn = data
         else:
-            Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
+            Xn = self.pgd_attack(self.network, data, target, noise, np.inf, 100, 0.25*noise, use_optimizer=False, loss_fn=self.loss)
         
         ret = 0
         #valDice = DiceIndex()
         with torch.no_grad():
             output = self.network(Xn)
-            ret = self.getOnlineDiceMeanOnlyDoubleClass(output[0], target[0])
+            ret = self.getOnlineDiceMean(output[0], target[0])
+            self.my_run_online_evaluation(output, target)         
+        del target   
+        return ret.cpu().numpy()
+    
+    
+    def run_one_adv(self, data_dict, noise, adv):
+        self.network.eval()
+        #data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']# target is a mask, but should have two...
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)# only the first target among the six is useful
+        adv.attacks_to_run = ['apgd-ce','apgd-dlr','square']
+        #adv.attacks_to_run = ['square']
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.optimizer.zero_grad()
+        Xn = 0
+        if noise == 0:
+            Xn = data
+        else:
+            #Xn = self.pgd_attack(self.network, data, target, noise, np.inf, 100, 0.25*noise, use_optimizer=False, loss_fn=self.loss)
+            Xn = adv.run_standard_evaluation(data, target, bs = target[0].shape[0], return_labels = False)
+        
+        ret = 0
+        #valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            ret = self.getOnlineDiceMean(output[0], target[0])
+            self.my_run_online_evaluation(output, target)         
+        del target   
+        return ret.cpu().numpy()
+
+    def rand_uniform_attack(self, model, X, Y, noise_norm, max_iter, clip_X_min=0, clip_X_max=1, norm_type = np.inf):
+        with torch.no_grad():
+            Xout=X.detach().clone()
+            dice_pre = None
+            for n in range(0, max_iter):
+                if norm_type == 2:
+                    deltaX = torch.rand_like(X)
+                    deltaX = clip_norm_(deltaX, norm_type, noise_norm)
+                    Xn = X + deltaX
+                else:
+                    Xn = X + noise_norm*(torch.rand_like(X)) # rand_like returns uniform noise in [0,1]
+                    
+                Xn.clamp_(clip_X_min, clip_X_max)
+                Zn = model(Xn)
+                loss_dice=self.getOnlineDiceMean(Zn[0], Y[0])
+                if dice_pre is not None:
+                    Ypn_ne_Y = (loss_dice < dice_pre)
+                else: 
+                    Ypn_ne_Y = (loss_dice < 1)
+                Xout[Ypn_ne_Y]=Xn[Ypn_ne_Y]
+                dice_pre = loss_dice
+        return Xout    
+    
+    def run_one_white(self, data_dict, noise, norm_type):
+        #norm type is np.inf or 2#
+        self.network.eval()
+        #data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']# target is a mask, but should have two...
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)# only the first target among the six is useful
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.optimizer.zero_grad()
+        Xn = 0
+        if noise == 0:
+            Xn = data
+        else:
+            Xn = self.rand_uniform_attack(self.network, data, target, noise, 100, norm_type = norm_type)
+        
+        ret = 0
+        #valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            ret = self.getOnlineDiceMean(output[0], target[0])
             self.my_run_online_evaluation(output, target)         
         del target   
         return ret.cpu().numpy()
@@ -1738,7 +1829,7 @@ class NetworkTrainer(object):
             self.run_online_evaluation(output, target)         
         del target
 #%% adversarial part   
-    def run_validate_adv(self, noise):
+    def run_validate_adv_pgd100(self, noise):
         print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
         if not torch.cuda.is_available():
             self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
@@ -1772,12 +1863,14 @@ class NetworkTrainer(object):
         #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
         avg = []
         for data_dict in self.ts_gen:
+            
+            # autoattack is used here
+            #https://github.com/BCV-Uniandes/ROG/tree/2a503eaed104e3748e1f6454372b349527253fd
             #check if this target has no foregroud classes, if yes, ignore it
             target = data_dict['target']
             temp = target[0]
             if temp.max()==0:
-                continue
-            
+                continue           
             #finishe check
             avg.append(self.run_one_adv(data_dict, noise))
             print ("one batch is done")
@@ -1798,6 +1891,121 @@ class NetworkTrainer(object):
         epoch_end_time = time()
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
         return validationDice, ret2
+
+
+    def run_validate_adv(self, noise, norm_type):
+        print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        self._maybe_init_amp()
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+        if not self.was_initialized:
+            self.initialize(True)
+        counter = 1
+        epoch_start_time = time()
+        self.network.eval()
+        avg = []
+        adversary = AutoAttack(self.network, norm_type= norm_type, eps = noise, version='standard', loss_fn = self.loss2)
+        #norm = "L2"
+        for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue         
+            avg.append(self.run_one_adv(data_dict, noise, adversary)) 
+            print ("one batch is done")
+            if data_dict['last']:
+                break
+            #if counter ==20:
+            #    break
+            counter +=1
+        ret = self.my_finish_online_evaluation()       
+        avg = np.concatenate(avg)
+        ret2 = avg.mean()
+        validationDice = np.mean(ret)
+        self.print_to_log_file("av global foreground dice: ", ret)
+        self.print_to_log_file("av paired dice: (only with complete target)", ret2)
+        self.print_to_log_file("validation dice: %.4f" % validationDice)
+        epoch_end_time = time()
+        self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
+        return validationDice, ret2
+    
+#%% adversarial part   
+    def run_validate_white(self, noise, norm_type):
+        print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+
+        #_ = self.tr_gen.next()
+        #_ = self.val_gen.next()
+
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+      
+        #self.plot_network_architecture()
+
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        counter = 1
+        epoch_start_time = time()
+        # validation with train=False
+        self.network.eval()
+        #val_losses = []
+        #counter = 0
+        #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
+        avg = []
+        if norm_type == "Linf":
+            norm_type = np.inf
+        elif norm_type == "L2":
+            norm_type = 2
+        else:
+            raise ValueError('norm not supported')
+            
+        for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue
+            
+            #finishe check
+            avg.append(self.run_one_white(data_dict, noise, norm_type))
+            print ("one batch is done")
+            if data_dict['last']:
+                break
+            #if counter ==20:
+            #    break
+            counter +=1
+
+        ret = self.my_finish_online_evaluation()
+        
+        avg = np.concatenate(avg)
+        ret2 = avg.mean()
+        validationDice = np.mean(ret)
+        self.print_to_log_file("av global foreground dice: ", ret)
+        self.print_to_log_file("av paired dice: (only with complete target)", ret2)
+        self.print_to_log_file("validation dice: %.4f" % validationDice)
+        epoch_end_time = time()
+        self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
+        return validationDice, ret2   
+    
+    #def run_validate_white
 #%% adversarial part   
     def run_validate_adv_IFGSM_old(self, noise):
         print ("+++++++++++++++++noise ",str(noise)," is running, (IFGSM)+++++++++++++++++++++++++++++++")

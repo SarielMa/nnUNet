@@ -67,7 +67,7 @@ class TRADES_TE():
         return loss
 
 class PGD_TE():
-    def __init__(self, loss_fn, num_samples, momentum, es, step_size, epsilon, perturb_steps=10, norm='l2'):
+    def __init__(self, loss_fn, multioutput_weights, num_samples, momentum, es, step_size, epsilon, perturb_steps=10, norm='l2'):
         # initialize soft labels to onthot vectors
         print('number samples: ', num_samples)
         #self.soft_labels = torch.zeros(num_samples, num_output, num_classes, dtype=torch.float).cuda(non_blocking=True)       
@@ -81,15 +81,16 @@ class PGD_TE():
         self.loss_fn = loss_fn
         self.num_output = None
         self.num_samples = num_samples
+        self.ds_loss_weights = multioutput_weights
 
     def multipleOutputReg(self, Z, Y):
         assert isinstance(Z, (tuple, list)), "x must be either tuple or list"
         assert isinstance(Y, (tuple, list)), "y must be either tuple or list"
         weights = self.ds_loss_weights
-        l = weights[0] * ((F.softmax(Z[0], dim=1) - Y[0]) ** 2).mean()
+        l = weights[0] * ((F.softmax(Z[0].view(Z[0].shape[0], -1), dim=1) - Y[0]) ** 2).mean()
         for i in range(1, len(Z)):
             if weights[i] != 0:
-                l += weights[i] * ((F.softmax(Z[i], dim=1) - Y[i]) ** 2).mean()
+                l += weights[i] * ((F.softmax(Z[i].view(Z[i].shape[0], -1), dim=1) - Y[i]) ** 2).mean()
         return l        
 
     def __call__(self, x_natural, y, index, epoch, model, optimizer, weight):
@@ -100,13 +101,13 @@ class PGD_TE():
         if len(self.soft_labels) == 0:
             print ("creating the soft labels........ ")
             for i in range(self.num_output):
-                self.soft_labels.append(torch.zeros(self.num_samples, logits[i].shape[2]*logits[i].shape[3], 
+                self.soft_labels.append(torch.zeros(self.num_samples, logits[i].shape[1]*logits[i].shape[2]*logits[i].shape[3], 
                                                     dtype=torch.float).cuda(non_blocking=True))
         
         soft_labels_batch = []
         if epoch >= self.es:
             for i in range(self.num_output):
-                prob = F.softmax(logits[i].detach(), dim=1)
+                prob = F.softmax(logits[i].view(logits[i].shape[0], -1).detach(), dim=1)
                 self.soft_labels[i][index] = self.momentum * self.soft_labels[i][index] + (1 - self.momentum) * prob
                 soft_labels_batch.append(self.soft_labels[i][index] / self.soft_labels[i][index].sum(1, keepdim=True))
 
@@ -120,7 +121,7 @@ class PGD_TE():
             with torch.enable_grad():
                 logits_adv = model(x_adv)
                 if epoch >= self.es:
-                    loss = self.loss_fn(logits_adv, y) + weight * multipleOutputReg(self, logits_adv, soft_labels_batch)
+                    loss = self.loss_fn(logits_adv, y) + weight * self.multipleOutputReg(logits_adv, soft_labels_batch)
                 else:
                     loss = self.loss_fn(logits_adv, y)
             grad = torch.autograd.grad(loss, [x_adv])[0]
@@ -141,7 +142,7 @@ class PGD_TE():
         # calculate robust loss
         logits = model(x_adv)
         if epoch >= self.es:
-            loss = self.loss_fn(logits, y) + weight * multipleOutputReg(self, logits_adv, soft_labels_batch)
+            loss = self.loss_fn(logits, y) + weight * self.multipleOutputReg(logits, soft_labels_batch)
         else:
             loss = self.loss_fn(logits, y)
         return loss
