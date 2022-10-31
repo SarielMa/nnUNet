@@ -453,7 +453,7 @@ class SquareAttack():
 
             x_to_fool = x.clone()
 
-            y_to_fool = [y[i].clone() for i in range(3)]
+            y_to_fool = [y[i].clone() for i in range(len(y))]
 
             adv_curr = self.attack_single_run(
                 x_to_fool, y_to_fool[0])

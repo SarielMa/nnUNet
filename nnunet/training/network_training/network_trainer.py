@@ -48,6 +48,64 @@ from nnunet.autoattackfornnunet.autoattack import AutoAttack
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
+    
+    
+    
+def clip_norm_(noise, norm_type, norm_max):
+    if not isinstance(norm_max, torch.Tensor):
+        return clip_normA_(noise, norm_type, norm_max)
+    else:
+        return clip_normB_(noise, norm_type, norm_max)
+#%%
+def clip_normA_(noise, norm_type, norm_max):
+    # noise is a tensor modified in place, noise.size(0) is batch_size
+    # norm_type can be np.inf, 1 or 2, or p
+    # norm_max is a scalar noise level
+    if noise.size(0) == 0:
+        return noise
+    with torch.no_grad():
+        if norm_type == np.inf or norm_type == 'Linf':
+            noise.clamp_(-norm_max, norm_max)
+        elif norm_type == 2 or norm_type == 'L2':
+            N=noise.view(noise.size(0), -1)
+            l2_norm= torch.sqrt(torch.sum(N**2, dim=1, keepdim=True))
+            temp = (l2_norm > norm_max).squeeze()
+            if temp.sum() > 0:
+                N[temp]*=norm_max/l2_norm[temp]
+        else:
+            raise NotImplementedError("other norm clip is not implemented.")
+    #-----------
+    return noise
+#%%
+def clip_normB_(noise, norm_type, norm_max):
+    # noise is a tensor modified in place, noise.size(0) is batch_size
+    # norm_type can be np.inf, 1 or 2, or p
+    # norm_max is 1D tensor, norm_max[k] is the maximum noise level for noise[k]
+    if noise.size(0) == 0:
+        return noise
+    with torch.no_grad():
+        if norm_type == np.inf or norm_type == 'Linf':
+            #for k in range(noise.size(0)):
+            #    noise[k].clamp_(-norm_max[k], norm_max[k])
+            N=noise.view(noise.size(0), -1)
+            norm_max=norm_max.view(norm_max.size(0), -1)
+            N=torch.max(torch.min(N, norm_max), -norm_max)
+            N=N.view(noise.size())
+            noise-=noise-N
+        elif norm_type == 2 or norm_type == 'L2':
+            N=noise.view(noise.size(0), -1)
+            l2_norm= torch.sqrt(torch.sum(N**2, dim=1, keepdim=True))
+            norm_max=norm_max.view(norm_max.size(0), 1)
+            #print(l2_norm.shape, norm_max.shape)
+            temp = (l2_norm > norm_max).squeeze()
+            if temp.sum() > 0:
+                norm_max=norm_max[temp]
+                norm_max=norm_max.view(norm_max.size(0), -1)
+                N[temp]*=norm_max/l2_norm[temp]
+        else:
+            raise NotImplementedError("not implemented.")
+        #-----------
+    return noise
 
 class NetworkTrainer(object):
     def __init__(self, deterministic=True, fp16=False):

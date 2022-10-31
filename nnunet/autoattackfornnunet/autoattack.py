@@ -133,27 +133,7 @@ class AutoAttack():
         
         with torch.no_grad():
             # calculate accuracy
-            n_batches = int(np.ceil(x_orig.shape[0] / bs))
-            robust_flags = torch.zeros(x_orig.shape[0], dtype=torch.bool, device=x_orig.device)
-            #y_adv = torch.empty_like(y_orig)
-            for batch_idx in range(n_batches):
-                start_idx = batch_idx * bs
-                end_idx = min( (batch_idx + 1) * bs, x_orig.shape[0])
-                x = x_orig[start_idx:end_idx, :].clone().to(self.device)
-                y = [y_orig[i][start_idx:end_idx].clone().to(self.device) for i in range(3)]
-                #y = y_orig[start_idx:end_idx].clone().to(self.device) 
-                output = self.model(x)
-                #y_adv[start_idx: end_idx] = output[0]
-                dices = self.dice(output[0], y[0]).to(self.device)
-                correct_batch = (dices > self.threshold).to(self.device)
-                robust_flags[start_idx:end_idx] = correct_batch.detach().to(robust_flags.device)
-
-            robust_accuracy = torch.sum(robust_flags).item() / x_orig.shape[0]
-            robust_accuracy_dict = {'clean': robust_accuracy}
-            
-            if self.verbose:
-                self.logger.log('initial accuracy: {:.2%}'.format(robust_accuracy))
-                    
+            n_batches = int(np.ceil(x_orig.shape[0] / bs))                    
             x_adv = x_orig.clone().detach()
             startt = time.time()
             # start runing all the attacks   
@@ -161,20 +141,14 @@ class AutoAttack():
             
             for attack in self.attacks_to_run:
                 # item() is super important as pytorch int division uses floor rounding
-                n_batches = int(np.ceil( x_orig.shape[0]/ bs))
-                robust_lin_idcs = torch.nonzero(robust_flags, as_tuple=False)
-
-                
+                n_batches = int(np.ceil( x_orig.shape[0]/ bs))               
                 for batch_idx in range(n_batches):
                     start_idx = batch_idx * bs
                     end_idx = min((batch_idx + 1) * bs, x_orig.shape[0])
-
-                    batch_datapoint_idcs = robust_lin_idcs[start_idx:end_idx]
-                    if len(batch_datapoint_idcs.shape) > 1:
-                        batch_datapoint_idcs.squeeze_(-1)
-                    x = x_orig[batch_datapoint_idcs, :].clone().to(self.device)
-                    y = [y_orig[i][batch_datapoint_idcs].clone().to(self.device) for i in range(3)]
-                    #y = y_orig[batch_datapoint_idcs].clone().to(self.device) 
+                        
+                        
+                    x = x_orig.clone().to(self.device)
+                    y = [y_orig[i].clone().to(self.device) for i in range(len(y_orig))]
 
                     # make sure that x is a 4d tensor even if there is only a single datapoint left
                     if len(x.shape) == 3:
@@ -183,12 +157,14 @@ class AutoAttack():
                     # run attack
                     if attack == 'apgd-ce':
                         # apgd on cross-entropy loss
+                        print("apgd is running")
                         self.apgd.loss = 'dice'
                         self.apgd.threshold = self.threshold
                         self.apgd.seed = self.get_seed()
                         adv_curr = self.apgd.perturb(x, y) #cheap=True    
                         
                     elif attack == 'apgd-dlr':
+                        print ("apgd dlr is running")
                         self.apgd.loss = 'dlr'
                         self.apgd.threshold = self.threshold
                         self.apgd.seed = self.get_seed()
@@ -203,93 +179,12 @@ class AutoAttack():
                 
                     output = self.model(adv_curr)                   
                     dices = self.dice(output[0], y[0]).to(self.device)
-                    false_batch = (dices < self.prev[batch_datapoint_idcs]).to(robust_flags.device)
-                    self.prev[batch_datapoint_idcs] = dices
-                    #self.threshold = self.prev.min().item()
-                    non_robust_lin_idcs = batch_datapoint_idcs[false_batch]
-                    robust_flags[non_robust_lin_idcs] = False
+                    false_batch = (dices < self.prev).to(x_adv.device)
+                    self.prev = dices
                     #  only record those samples with lower dice scores than the last ones
-                    x_adv[batch_datapoint_idcs[false_batch]] = adv_curr[false_batch].detach().to(x_adv.device)
-                    
-                    #x_orig[batch_datapoint_idcs] = x_adv[batch_datapoint_idcs]
-
-
+                    x_adv[false_batch] = adv_curr[false_batch].detach().to(x_adv.device)
         return x_adv
         
-    def clean_accuracy(self, x_orig, y_orig, bs=250):
-        n_batches = math.ceil(x_orig.shape[0] / bs)
-        acc = 0.
-        for counter in range(n_batches):
-            x = x_orig[counter * bs:min((counter + 1) * bs, x_orig.shape[0])].clone().to(self.device)
-            y = y_orig[counter * bs:min((counter + 1) * bs, x_orig.shape[0])].clone().to(self.device)
-            output = self.get_logits(x)
-            acc += (output.max(1)[1] == y).float().sum()
-            
-        if self.verbose:
-            print('clean accuracy: {:.2%}'.format(acc / x_orig.shape[0]))
-        
-        return acc.item() / x_orig.shape[0]
-        
-    def run_standard_evaluation_individual(self, x_orig, y_orig, bs=250, return_labels=False):
-        if self.verbose:
-            print('using {} version including {}'.format(self.version,
-                ', '.join(self.attacks_to_run)))
-        
-        l_attacks = self.attacks_to_run
-        adv = {}
-        verbose_indiv = self.verbose
-        self.verbose = False
-        
-        for c in l_attacks:
-            startt = time.time()
-            self.attacks_to_run = [c]
-            x_adv, y_adv = self.run_standard_evaluation(x_orig, y_orig, bs=bs, return_labels=True)
-            if return_labels:
-                adv[c] = (x_adv, y_adv)
-            else:
-                adv[c] = x_adv
-            if verbose_indiv:    
-                acc_indiv  = self.clean_accuracy(x_adv, y_orig, bs=bs)
-                space = '\t \t' if c == 'fab' else '\t'
-                self.logger.log('robust accuracy by {} {} {:.2%} \t (time attack: {:.1f} s)'.format(
-                    c.upper(), space, acc_indiv,  time.time() - startt))
-        
-        return adv
-        
-    def set_version(self, version='standard'):
-        if self.verbose:
-            print('setting parameters for {} version'.format(version))
-        
-        if version == 'standard':
-            self.attacks_to_run = ['apgd-ce', 'apgd-t', 'fab-t', 'square']
-            if self.norm in ['Linf', 'L2']:
-                self.apgd.n_restarts = 1
-                self.apgd_targeted.n_target_classes = 9
-            elif self.norm in ['L1']:
-                self.apgd.use_largereps = True
-                self.apgd_targeted.use_largereps = True
-                self.apgd.n_restarts = 5
-                self.apgd_targeted.n_target_classes = 5
-            self.fab.n_restarts = 1
-            self.apgd_targeted.n_restarts = 1
-            self.fab.n_target_classes = 9
-            #self.apgd_targeted.n_target_classes = 9
-            self.square.n_queries = 5000
-        
-        elif version == 'plus':
-            self.attacks_to_run = ['apgd-ce', 'apgd-dlr', 'fab', 'square', 'apgd-t', 'fab-t']
-            self.apgd.n_restarts = 5
-            self.fab.n_restarts = 5
-            self.apgd_targeted.n_restarts = 1
-            self.fab.n_target_classes = 9
-            self.apgd_targeted.n_target_classes = 9
-            self.square.n_queries = 5000
-            if not self.norm in ['Linf', 'L2']:
-                print('"{}" version is used with {} norm: please check'.format(
-                    version, self.norm))
-        
-        elif version == 'rand':
-            self.attacks_to_run = ['apgd-ce', 'apgd-dlr']
-            self.apgd.n_restarts = 1
-            self.apgd.eot_iter = 20
+
+
 

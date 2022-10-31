@@ -126,7 +126,7 @@ class APGDAttack():
     def attack_single_run(self, x_in, y_in):
         x = x_in.clone() 
         y = y_in
-        y = [y[i].long() for i in range(3)]
+        y = [y[i].long() for i in range(len(y))]
         #y = y.long()
         self.n_iter_2 = max(int(0.22 * self.n_iter), 1)
         self.n_iter_min = max(int(0.06 * self.n_iter), 1)
@@ -280,7 +280,7 @@ class APGDAttack():
         return x_best_adv
 
     def perturb(self, x_in, y_in):# y_in is a list
-        print("apgd is running")
+       
         x = x_in.clone() 
         self.init_hyperparam(x)
         y = y_in
@@ -299,7 +299,7 @@ class APGDAttack():
 
             x_to_fool = x.clone()
 
-            y_to_fool = [y[i].clone() for i in range(3)]
+            y_to_fool = [y[i].clone() for i in range(len(y))]
 
             adv_curr = self.attack_single_run(
                 x_to_fool, y_to_fool)

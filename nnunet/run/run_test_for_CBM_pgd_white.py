@@ -197,13 +197,13 @@ def main(noise, filename, taskid, white, norm_type):
 if __name__ == "__main__":
     
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
-    os.environ["CUDA_VISIBLE_DEVICES"]="2"
+    os.environ["CUDA_VISIBLE_DEVICES"]="1"
     
     import random
     random.seed(10)
     ##########################need to be configured############################
     base = "C:/Research/IMA_on_segmentation"
-    choice = 1
+    choice = 0
     
     ###########################################################################
     #dataset name
@@ -211,6 +211,7 @@ if __name__ == "__main__":
     selected = dataset[choice]
     # noise name
     #methods names
+    #,"IMA", "TRADES","TE","PGD"
     #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
     netDict = [["IMA", "TRADES","TE","PGD","STD"],#D2
                 ["STD","IMA", "TRADES","TE","PGD"],#D4
@@ -218,9 +219,7 @@ if __name__ == "__main__":
                 ]
         
     nets = netDict[choice]
-    #
-    folderDict = []
-    
+    folderDict = [] 
     #D2
     folders2 = ["result_CBM/002/model_IMA002_N_20_D_5_final_checkpoint.model",               
                "result_CBM/002/TRADES002.model",
@@ -250,15 +249,14 @@ if __name__ == "__main__":
     for model in folders:
         assert os.path.exists(model)
     #basePath = base+"/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
-    for norm_type in ['L2', 'Linf']: 
-        
+    for norm_type in ['L2', 'Linf']:        
         if norm_type == 'Linf':
             noiseDict =[[0, 2/255, 4/255, 8/255],#D2
                         [0, 2/255, 4/255, 8/255],#D4 
                         [0, 2/255, 4/255, 8/255]]#D5 
         else:
             noiseDict =[[0, 10, 20, 30],#D2
-                        [5, 15, 25],#D4 
+                        [0 ,5, 15, 25],#D4 
                         [0, 10, 25, 40]]#D5             
         noises = noiseDict[choice]
         print ("PGD validation")
