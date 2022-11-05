@@ -1674,8 +1674,12 @@ class NetworkTrainer(object):
         target = data_dict['target']# target is a mask, but should have two...
         data = maybe_to_torch(data)
         target = maybe_to_torch(target)# only the first target among the six is useful
-        adv.attacks_to_run = ['apgd-ce','apgd-dlr','square']
-        #adv.attacks_to_run = ['square']
+        if target[0].shape[1] <=2:
+            adv.attacks_to_run = ['apgd-ce','square'] # dlr loss only work for 2+ classes
+        else:
+            adv.attacks_to_run = ['apgd-ce','apgd-dlr','square']
+        
+        #adv.attacks_to_run = ['apgd-dlr']
         if torch.cuda.is_available():
             data = to_cuda(data)
             target = to_cuda(target)
@@ -2199,34 +2203,20 @@ class NetworkTrainer(object):
         print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
         if not torch.cuda.is_available():
             self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
-
-        #_ = self.tr_gen.next()
-        #_ = self.val_gen.next()
-
-
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
         self._maybe_init_amp()
 
-      
-        #self.plot_network_architecture()
-
         if cudnn.benchmark and cudnn.deterministic:
             warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
                  "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
                  "If you want deterministic then set benchmark=False")
-
         if not self.was_initialized:
             self.initialize(True)
-
         counter = 1
         epoch_start_time = time()
-        # validation with train=False
         self.network.eval()
-        #val_losses = []
-        #counter = 0
-        #print ("num val batches per epoch is ", self.num_val_batches_per_epoch)
         avg = []
         for data_dict in self.ts_gen:
             #check if this target has no foregroud classes, if yes, ignore it
@@ -2248,11 +2238,7 @@ class NetworkTrainer(object):
         
         avg = np.concatenate(avg)
         ret2 = avg
-        validationDice = ret
-        
-        
-
-        
+        validationDice = ret       
         self.print_to_log_file("av global foreground dice: ", ret)
         self.print_to_log_file("av paired dice: (only with complete target)", ret2.shape)
         epoch_end_time = time()

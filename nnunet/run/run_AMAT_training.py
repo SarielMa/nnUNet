@@ -18,7 +18,7 @@ curDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())
 curDir = os.path.dirname(curDir)
 curDir = os.path.dirname(curDir)
 sys.path.insert(0, curDir)
-
+import torch
 import argparse
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.run.default_configuration import get_default_configuration
@@ -29,21 +29,21 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetTrainerCascadeFullRes
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
-import matplotlib.pyplot as plt
-import numpy as np
-import csv
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
+    
+    
 
-def main(noise, filename, taskid):
+
+def main(params):
     parser = argparse.ArgumentParser()
-    """
-    parser.add_argument("network")
-    parser.add_argument("network_trainer")
-    parser.add_argument("task", help="can be task name or task id")
-    parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
-    """
+    
+    #parser.add_argument("network")
+    #parser.add_argument("network_trainer")
+    parser.add_argument("--task", default = params.task, help="can be task name or task id")
+    #parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
+    
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
@@ -104,18 +104,17 @@ def main(noise, filename, taskid):
                              'Optional. Beta. Use with caution.')
 
     args = parser.parse_args()
-    """
+    
     task = args.task
-    fold = args.fold
-    network = args.network
-    network_trainer = args.network_trainer
-    """
-    task = taskid
-    fold = "0"
+    #fold = args.fold
+    #network = args.network
+    #network_trainer = args.network_trainer
+    
+    #task = "002"
+    fold = "1"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"
-    #validation_only = args.validation_only
-    validation_only = False
+    validation_only = args.validation_only
     plans_identifier = args.p
     find_lr = args.find_lr
     disable_postprocessing_on_folds = args.disable_postprocessing_on_folds
@@ -166,7 +165,7 @@ def main(noise, filename, taskid):
     else:
         assert issubclass(trainer_class,
                           nnUNetTrainer), "network_trainer was found but is not derived from nnUNetTrainer"
-    # e.g. nnUNetTrainerV2
+
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
@@ -179,80 +178,133 @@ def main(noise, filename, taskid):
         # the training chashes
         trainer.save_latest_only = True  # if false it will not store/overwrite _latest but separate files each
 
-    trainer.initialize(training = not validation_only)#only validate it
+    trainer.initialize(not validation_only)
 
-    trainer.my_load_final_checkpoint(filename, train=False)
-    return trainer.run_validate_sample_wise(noise)
-    
-      
+    if find_lr:
+        trainer.find_lr()
+    else:
+        if not validation_only:
+            if args.continue_training:
+                # -c was set, continue a previous training and ignore pretrained weights
+                trainer.load_latest_checkpoint()
+            elif (not args.continue_training) and (args.pretrained_weights is not None):
+                # we start a new training. If pretrained_weights are set, use them
+                load_pretrained_weights(trainer.network, args.pretrained_weights)
+            else:
+                # new training without pretraine weights, do nothing
+                pass
+
+            trainer.run_IMA_training_grid(params)
+        else:
+            if valbest:
+                trainer.load_best_checkpoint(train=False)
+            else:
+                trainer.load_final_checkpoint(train=False)
+
+        trainer.network.eval()
+
+        # predict validation
+        trainer.validate(save_softmax=args.npz, validation_folder_name=val_folder,
+                         run_postprocessing_on_folds=not disable_postprocessing_on_folds,
+                         overwrite=args.val_disable_overwrite)
+
+        if network == '3d_lowres' and not args.disable_next_stage_pred:
+            print("predicting segmentations for the next stage of the cascade")
+            predict_next_stage(trainer, join(dataset_directory, trainer.plans['data_identifier'] + "_stage%d" % 1))
 
 
 
+class AMAT_params_D2:
+    def __init__(self, delta, noise = float("inf")):           
+        #used to pass parameters to ima iteration
+        self.task = "002"
+        self.noise = noise 
+        self.norm_type = 2
+        self.alpha = 4
+        self.max_iter = 20
+        self.stop = 0
+        self.refine_Xn_max_iter = 10
+        self.beta = 0.5
+        self.beta_position =1
+        self.E = 0
+        self.epoch_refine = 10
+        self.delta = delta 
+        self.model_eval_attack=0
+        self.model_eval_Xn=0
+        self.model_Xn_advc_p=0
+        self.Xn1_equal_X =0
+        self.Xn2_equal_Xn =0
+        self.pgd_replace_Y_with_Yp=0   
+        self.title = "AMAT"+self.task
+
+class AMAT_params_D4:# for D4
+    def __init__(self, delta, noise = float("inf")):           
+        #used to pass parameters to ima iteration
+        self.task = "004"
+        self.noise = noise #15
+        self.norm_type = 2
+        self.alpha = 4
+        self.max_iter = 20
+        self.stop = 0
+        self.refine_Xn_max_iter = 10
+        self.beta = 0.5
+        self.beta_position =1
+        self.E = 0
+        self.epoch_refine = 10
+        self.delta = delta #2.5
+        self.model_eval_attack=0
+        self.model_eval_Xn=0
+        self.model_Xn_advc_p=0
+        self.Xn1_equal_X =0
+        self.Xn2_equal_Xn =0
+        self.pgd_replace_Y_with_Yp=0 
+        self.title = "AMAT"+self.task
+        
+class AMAT_params_D5:# for D5
+    def __init__(self, delta, noise = float("inf")):           
+        #used to pass parameters to ima iteration
+        self.task = "005"
+        self.noise = noise 
+        self.norm_type = 2
+        self.alpha = 4
+        self.max_iter = 20
+        self.stop = 0 
+        self.refine_Xn_max_iter = 10
+        self.beta = 0.5
+        self.beta_position =1
+        self.E = 0
+        self.epoch_refine = 10
+        self.delta = delta #10
+        self.model_eval_attack=0
+        self.model_eval_Xn=0
+        self.model_Xn_advc_p=0
+        self.Xn1_equal_X =0
+        self.Xn2_equal_Xn =0
+        self.pgd_replace_Y_with_Yp=0 
+        self.title = "AMAT"+self.task
 
 if __name__ == "__main__":
-    
+    #os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(f'{i}' for i in range(torch.cuda.device_count()))
+    #torch.cuda.is_available()
+    #torch.cuda.set_device(3)
+    #from multiprocessing import freeze_support
+    #freeze_support()
+
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"]="1"
     
-    import random
-    random.seed(10)
-    ##########################need to be configured############################
-    base = "C:/Research/IMA_on_segmentation"
-    choice = 1
-    ###########################################################################
-    #dataset name
-    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
-    selected = dataset[choice]
-    # noise name
-    noiseDict =[[0,5,15,25],#D2
-                [0,1,5,10,15],#D4 
-                [0,10,20,40]#D5
-                ]
-    noises = noiseDict[choice]
-    #methods names
-    #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
-    netDict = [["nnUnet"],#D2
-                ["nnUnet"],#D4
-                ["nnUnet"]#D5
-                ]
-        
-    nets = netDict[choice]
-    #
-    folderDict = []
-    #D2
-    folders2 = ["AMATMean100/model_final_checkpoint.model"]
-    #D4   
-    folders4 = ["AMATMean100/model_final_checkpoint.model"]
-    #D5   
-    folders5 = ["AMATMean100/model_final_checkpoint.model"]  
-
-
+    choice  = 2
+    if choice == 0:
+        # D2
+        for delta in [1,3,5,7,9]:
+            main(AMAT_params_D2( delta)) 
+    if choice == 1:
+        # D4
+        # 2.5 is the one on the amat paper
+        for delta in [0.1,0.3,0.7,0.9,1.1,1.3,1.7,1.9]:
+            main(AMAT_params_D4( delta))
+    # D5
+    if choice == 2:
+        for delta in [17,19,21]:
+            main(AMAT_params_D5( delta))
     
-    folderDict.append(folders2)
-    folderDict.append(folders4)
-    folderDict.append(folders5)
-    folders = folderDict[choice]
-
-    
-    basePath = base+"/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
-
-    
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111)
-    fig2 = plt.figure(figsize=(10, 8))
-    ax2 = fig2.add_subplot(111)    
-    cols = ['b','g','r','y','k','m','c']
-    yAxises = []
-    yAxises2 = []
-    fields = ["noise"]+[str(i) for i in noises]
-    rows1 = []
-    rows2 = []
-
-    _, avgDices = main(0, join(basePath, folders[0]), selected[4:7]) 
-    
-    print(avgDices.size())
-    # search "tr_keys" in nnUnetTrainerV2.py to get the training set
-
-
-    
-   

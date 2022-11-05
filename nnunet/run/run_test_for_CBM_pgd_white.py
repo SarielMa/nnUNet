@@ -214,7 +214,7 @@ if __name__ == "__main__":
     #,"IMA", "TRADES","TE","PGD"
     #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
     netDict = [["IMA", "TRADES","TE","PGD","STD"],#D2
-                ["STD","IMA", "TRADES","TE","PGD"],#D4
+                ["STD","IMA", "TRADES","TE"],#D4
                 ["IMA", "TRADES","TE","PGD","STD"],#D5
                 ]
         
@@ -231,8 +231,7 @@ if __name__ == "__main__":
     folders4 = ["result_CBM/004/model_final_checkpoint.model",
                 "result_CBM/004/model_IMA004_N_15_D_2.0_final_checkpoint.model",               
                "result_CBM/004/TRADES004.model",
-               "result_CBM/004/model_TE_final_checkpoint.model",
-               "result_CBM/004/model_PGD15_final_checkpoint.model"]
+               "result_CBM/004/model_TE_final_checkpoint.model"]
     
     #D2
     folders5 = ["result_CBM/005/model_IMA005_N_40_D_10_final_checkpoint.model",               
@@ -257,7 +256,7 @@ if __name__ == "__main__":
         else:
             noiseDict =[[0, 10, 20, 30],#D2
                         [0 ,5, 15, 25],#D4 
-                        [0, 10, 25, 40]]#D5             
+                        [0, 10, 20, 30]]#D5             
         noises = noiseDict[choice]
         print ("PGD validation")
         fig = plt.figure(figsize=(10, 8))
@@ -318,13 +317,13 @@ if __name__ == "__main__":
     
         print("white validation")
         if norm_type == "Linf":
-            noiseDict =[[0, 32/255, 64/255, 128/255],#D2
-                        [0, 32/255, 64/255, 128/255],#D4 
-                        [0, 32/255, 64/255, 128/255]]#D5 
+            noiseDict =[[0, 8/255, 16/255, 32/255],#D2
+                        [0, 8/255, 16/255, 32/255],#D4 
+                        [0, 8/255, 16/255, 32/255]]#D5 
         else:
             noiseDict =[[0, 10, 20, 30],#D2
                         [0, 5, 15, 25],#D4 
-                        [0, 10, 25, 40]]#D5             
+                        [0, 10, 20, 30]]#D5             
         noises = noiseDict[choice]  
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111)
@@ -360,7 +359,7 @@ if __name__ == "__main__":
         ax.grid(True)
         fig.savefig("V_Dice_result_white_"+selected+".pdf",bbox_inches='tight')
         """
-        with open("V_Dice_result_auto_L"+norm_type+"_"+selected+".csv",'w') as csvfile:
+        with open("V_Dice_result_white_L"+norm_type+"_"+selected+".csv",'w') as csvfile:
             csvwriter = csv.writer(csvfile)
             csvwriter.writerow(fields)
             csvwriter.writerows(rows1)
@@ -374,7 +373,7 @@ if __name__ == "__main__":
         ax2.grid(True)
         fig2.savefig("AVG_Dice_result_white_"+selected+".pdf",bbox_inches='tight')    
         """
-        with open("AVG_Dice_result_auto_L"+norm_type+"_"+selected+".csv",'w') as csvfile:
+        with open("AVG_Dice_result_white_L"+norm_type+"_"+selected+".csv",'w') as csvfile:
             csvwriter = csv.writer(csvfile)
             csvwriter.writerow(fields)
             csvwriter.writerows(rows2)       

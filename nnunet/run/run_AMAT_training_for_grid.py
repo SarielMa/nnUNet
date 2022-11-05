@@ -214,7 +214,7 @@ def main(params):
 
 
 
-class IMA_params_D2:# for D2 
+class AMAT_params_D2:# for D2 
     def __init__(self, delta, noise = float("inf")):           
         #used to pass parameters to ima iteration
         self.task = "002"
@@ -237,7 +237,7 @@ class IMA_params_D2:# for D2
         self.pgd_replace_Y_with_Yp=0   
         self.title = "AMAT"+self.task
 
-class IMA_params_D4:# for D4
+class AMAT_params_D4:# for D4
     def __init__(self, delta, noise = float("inf")):           
         #used to pass parameters to ima iteration
         self.task = "004"
@@ -260,7 +260,7 @@ class IMA_params_D4:# for D4
         self.pgd_replace_Y_with_Yp=0 
         self.title = "AMAT"+self.task
         
-class IMA_params_D5:# for D5
+class AMAT_params_D5:# for D5
     def __init__(self, delta, noise = float("inf")):           
         #used to pass parameters to ima iteration
         self.task = "005"
