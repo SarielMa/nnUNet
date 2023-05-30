@@ -345,7 +345,10 @@ class nnUNetTrainer(NetworkTrainer):
         self.save_debug_information()
         return super(nnUNetTrainer, self).run_validate_adv(noise, norm_type)
     
-
+    def run_validate_adv_cmpb(self, noise, norm_type):
+        self.save_debug_information()
+        return super(nnUNetTrainer, self).run_validate_adv_cmpb(noise, norm_type)
+    
     def run_validate_white(self, noise, norm_type):
         self.save_debug_information()
         return super(nnUNetTrainer, self).run_validate_white(noise, norm_type)
@@ -749,6 +752,7 @@ class nnUNetTrainer(NetworkTrainer):
             self.online_eval_tp.append(list(tp_hard))
             self.online_eval_fp.append(list(fp_hard))
             self.online_eval_fn.append(list(fn_hard))
+            
     def my_filter_out(self, target, n_classes):
         #filter out those lacking classes
         t = target.view(target.size(0),-1)
@@ -759,7 +763,6 @@ class nnUNetTrainer(NetworkTrainer):
         return sensor
                   
     def my_run_online_evaluation(self, output, target):
-        # ignore all broken target (that do not have full number of classes)
         with torch.no_grad():
             num_classes = output.shape[1]
             output_softmax = softmax_helper(output)

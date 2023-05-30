@@ -839,6 +839,22 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ret, ret2 = super().run_validate_adv(noise, norm_type)
         self.network.do_ds = ds
         return ret,ret2
+
+    def run_validate_adv_cmpb(self, noise, norm_type):
+        """
+        if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
+        continued epoch with self.initial_lr
+
+        we also need to make sure deep supervision in the network is enabled for training, thus the wrapper
+        :return:
+        """
+        self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we want at the start of the training
+        ds = self.network.do_ds
+        self.network.do_ds = True
+        ret, ret2, ret3 = super().run_validate_adv_cmpb(noise, norm_type)
+        self.network.do_ds = ds
+        return ret, ret2, ret3
+
     
     def run_validate_white(self, noise, norm_type):
         """

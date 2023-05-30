@@ -1666,6 +1666,7 @@ class NetworkTrainer(object):
         del target   
         return ret.cpu().numpy()
     
+  
     
     def run_one_adv(self, data_dict, noise, adv):
         self.network.eval()
@@ -1753,33 +1754,7 @@ class NetworkTrainer(object):
         del target   
         return ret.cpu().numpy()
 
-    def run_one_adv_ifgsm(self, data_dict, noise):
-        self.network.eval()
-        #data_dict = next(data_generator)
-        data = data_dict['data']
-        target = data_dict['target']# target is a mask, but should have two...
-        data = maybe_to_torch(data)
-        target = maybe_to_torch(target)# only the first target among the six is useful
-        
-        if torch.cuda.is_available():
-            data = to_cuda(data)
-            target = to_cuda(target)
-        
-        self.optimizer.zero_grad()
-        Xn = 0
-        if noise == 0:
-            Xn = data
-        else:
-            #Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
-            Xn = self.ifgsm_attack(self.network, data, target, noise, 2, 10, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
-        ret = 0
-        #valDice = DiceIndex()
-        with torch.no_grad():
-            output = self.network(Xn)
-            ret = self.getOnlineDiceMeanOnlyDoubleClass(output[0], target[0])
-            self.my_run_online_evaluation(output, target)         
-        del target   
-        return ret.cpu().numpy()
+
 
     def run_one_adv_to_show(self, data_dict, noise):
         self.network.eval()
@@ -1955,7 +1930,7 @@ class NetworkTrainer(object):
         return validationDice, ret2
 
 
-    def run_validate_adv(self, noise, norm_type):
+    def run_validate_adv_auto(self, noise, norm_type):
         print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
         if not torch.cuda.is_available():
             self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
@@ -2198,6 +2173,129 @@ class NetworkTrainer(object):
         epoch_end_time = time()
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
         return  resIFGSM, resPGD,
+    
+#%% run test for cmpb revision
+
+
+    def run_one_adv_ifgsm(self, data_dict, noise, norm_type, max_iter):
+        self.network.eval()
+        #data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']# target is a mask, but should have two...
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)# only the first target among the six is useful
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.optimizer.zero_grad()
+        Xn = 0
+        if noise == 0:
+            Xn = data
+        else:
+            #Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
+            Xn = self.ifgsm_attack(self.network, data, target, noise, norm_type, max_iter, 4 * noise/max_iter, use_optimizer=False, loss_fn=self.loss)
+        #ret = 0
+        #valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            #ret = self.getOnlineDiceMeanOnlyDoubleClass(output[0], target[0])
+            self.my_run_online_evaluation(output, target)         
+        del target   
+        #return ret.cpu().numpy()
+
+    def run_one_adv_pgd(self, data_dict, noise, norm_type, max_iter):
+        self.network.eval()
+        #data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']# target is a mask, but should have two...
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)# only the first target among the six is useful
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.optimizer.zero_grad()
+        Xn = 0
+        if noise == 0:
+            Xn = data
+        else:
+            Xn = self.pgd_attack(self.network, data, target, noise, norm_type, max_iter, 4 * noise/max_iter, use_optimizer=False, loss_fn=self.loss)
+        
+        #ret = 0
+        #valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            #ret = self.getOnlineDiceMean(output[0], target[0])
+            self.my_run_online_evaluation(output, target)         
+        del target   
+        #return ret.cpu().numpy()
+    
+    def run_validate_adv_cmpb(self, noise, norm_type):
+        print ("+++++++++++++++++noise ",str(noise)," is running, (IFGSM and PGD)+++++++++++++++++++++++++++++++")
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        self._maybe_init_amp()    
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+        counter = 1
+        epoch_start_time = time()
+        self.network.eval()
+        print ("FGSM evaluating is running")
+        for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue
+            self.run_one_adv_ifgsm(data_dict, noise, norm_type, max_iter = 1)
+            if data_dict['last']:
+                break
+            counter +=1
+        ret1 = self.my_finish_online_evaluation()
+        val1 = np.mean(ret1)
+        
+        print ("IFGSM evaluating is running")
+        for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue
+            self.run_one_adv_ifgsm(data_dict, noise, norm_type, max_iter = 10)
+            if data_dict['last']:
+                break
+            counter +=1
+        ret2 = self.my_finish_online_evaluation()
+        val2 = np.mean(ret2)
+        
+        print ("PGD evaluatiing is running")
+        for data_dict in self.ts_gen:
+            #check if this target has no foregroud classes, if yes, ignore it
+            target = data_dict['target']
+            temp = target[0]
+            if temp.max()==0:
+                continue
+            self.run_one_adv_pgd(data_dict, noise, norm_type, max_iter = 10)
+            if data_dict['last']:
+                break
+            counter +=1
+        ret3 = self.my_finish_online_evaluation()
+        val3 = np.mean(ret3)
+        
+        epoch_end_time = time()
+        self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
+        return  val1, val2, val3
+
 #%% adversarial part   
     def run_validate_sample_wise(self, noise):
         print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
