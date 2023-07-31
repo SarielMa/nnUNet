@@ -138,19 +138,19 @@ def TRADES_loss(model,
             x_adv = torch.clamp(x_adv, 0.0, 1.0)
     elif distance == 'l2':
         delta = 0.001 * torch.randn(x_natural.shape).cuda().detach()
-        delta = Variable(delta.data, requires_grad=True)
+        delta.requires_grad=True
 
         # Setup optimizers
         optimizer_delta = optim.SGD([delta], lr=epsilon / perturb_steps * 2)
 
         for _ in range(perturb_steps):
-            adv = x_natural + delta
+            x_adv = x_natural + delta
 
             # optimize
             optimizer_delta.zero_grad()
-            with torch.enable_grad():
-                loss = (-1) * criterion_kl(model(adv),model(x_natural))
-            loss.backward()
+            #with torch.enable_grad():
+            loss = (-1) * criterion_kl(model(x_adv),model(x_natural))
+            #loss.backward()
             # renorming gradient
             grad_adv = torch.autograd.grad(loss, x_adv)[0]
             delta.grad=grad_adv.detach()

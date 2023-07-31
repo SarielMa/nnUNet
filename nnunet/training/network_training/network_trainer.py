@@ -1311,7 +1311,7 @@ class NetworkTrainer(object):
         """
             
         
-        es_start = 0 * self.max_num_epochs
+        es_start = 0.5 * self.max_num_epochs
         es_end = 0.7 * self.max_num_epochs
         pgd_te = PGD_TE(  loss_fn = self.loss,
                            multioutput_weights = self.ds_loss_weights,
