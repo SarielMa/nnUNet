@@ -89,6 +89,7 @@ def main():
                              'Optional. Beta. Use with caution.')
     
     parser.add_argument('--cuda_id', type=str, required=False, default="0")
+    parser.add_argument('--epsilon', type=float, required=True, default="0")
     
     args = parser.parse_args()
     

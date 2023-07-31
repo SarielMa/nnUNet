@@ -116,8 +116,8 @@ def TRADES_loss(model,
                 step_size=0.003,
                 epsilon=0.031,
                 perturb_steps=10,
-                beta=1.0,
-                distance='l_inf'):
+                beta = 6.0,
+                distance='linf'):
     # define KL-loss
     #criterion_kl = nn.KLDivLoss(size_average=False)
     
@@ -125,7 +125,7 @@ def TRADES_loss(model,
     batch_size = len(x_natural)
     # generate adversarial example
     x_adv = x_natural.detach() + 0.001 * torch.randn(x_natural.shape).cuda().detach()
-    if distance == 'l_inf':
+    if distance == 'linf':
         for _ in range(perturb_steps):
             x_adv.requires_grad_()
             with torch.enable_grad():
@@ -136,7 +136,7 @@ def TRADES_loss(model,
             x_adv = x_adv.detach() + step_size * torch.sign(grad.detach())
             x_adv = torch.min(torch.max(x_adv, x_natural - epsilon), x_natural + epsilon)
             x_adv = torch.clamp(x_adv, 0.0, 1.0)
-    elif distance == 'l_2':
+    elif distance == 'l2':
         delta = 0.001 * torch.randn(x_natural.shape).cuda().detach()
         delta = Variable(delta.data, requires_grad=True)
 
@@ -152,6 +152,9 @@ def TRADES_loss(model,
                 loss = (-1) * criterion_kl(model(adv),model(x_natural))
             loss.backward()
             # renorming gradient
+            grad_adv = torch.autograd.grad(loss, x_adv)[0]
+            delta.grad=grad_adv.detach()
+            #
             grad_norms = delta.grad.view(batch_size, -1).norm(p=2, dim=1)
             delta.grad.div_(grad_norms.view(-1, 1, 1, 1))
             # avoid nan or inf if gradient is 0

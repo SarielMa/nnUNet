@@ -524,6 +524,66 @@ class nnUNetTrainerV2(nnUNetTrainer):
 
         return loss.detach().cpu().numpy(), flag1, flag2, E_new
 
+    def run_TRADES_iteration_v2(self, data_generator, norm = "l2", epsilon = 5.0, do_backprop=True, run_online_evaluation=False):
+        """
+        gradient clipping improves training stability
+
+        :param data_generator:
+        :param do_backprop:
+        :param run_online_evaluation:
+        :return:
+        """
+        task = self.dataset_directory.split("\\")[-1]
+        """
+        epsilon = None
+        if "002" in task:
+            epsilon = 20#cannot converge
+            #epsilon = 5
+        elif "004" in task:
+            epsilon = 15#cannot converge
+            #epsilon = 0.5
+        elif "005" in task:
+            epsilon = 40#cannot converge
+            #epsilon = 10
+        """
+        
+        data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']
+
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.network.zero_grad()
+        #print ("epsilon is ", epsilon)
+        loss, _, _ = TRADES_loss(self.network,
+                            self.loss,
+                            self.loss_kl,
+                            data,
+                            target,
+                            self.optimizer,
+                            step_size = epsilon/5,
+                            epsilon= epsilon,
+                            perturb_steps= 10,
+                            beta = 6,
+                            distance= norm)
+        loss.backward()      
+        torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
+        #--------------------
+
+        self.optimizer.step()
+        #--------------------
+
+        if run_online_evaluation:
+            self.run_online_evaluation(Yp, target)
+
+        del target
+
+        return loss.detach().cpu().numpy()
 
     def run_TRADES_iteration(self, data_generator, do_backprop=True, run_online_evaluation=False):
         """
@@ -840,7 +900,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         self.network.do_ds = ds
         return ret,ret2
 
-    def run_validate_adv_cmpb(self, noise, norm_type):
+    def run_validate_adv_cmpb(self, noise, norm_type, attack):
         """
         if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
         continued epoch with self.initial_lr
@@ -851,9 +911,9 @@ class nnUNetTrainerV2(nnUNetTrainer):
         self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we want at the start of the training
         ds = self.network.do_ds
         self.network.do_ds = True
-        ret, ret2, ret3 = super().run_validate_adv_cmpb(noise, norm_type)
+        ret = super().run_validate_adv_cmpb(noise, norm_type, attack)
         self.network.do_ds = ds
-        return ret, ret2, ret3
+        return ret
 
     
     def run_validate_white(self, noise, norm_type):
@@ -919,7 +979,23 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ret = super().run_TE_training(self.dl_tr.counter)#pass the number of samples in training set
         self.network.do_ds = ds
         return ret 
-    
+
+    def run_TE_training_v2(self, norm, epsilon):# str and float
+        """
+        if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
+        continued epoch with self.initial_lr
+
+        we also need to make sure deep supervision in the network is enabled for training, thus the wrapper
+        :return:
+        """
+        self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we
+        # want at the start of the training
+        ds = self.network.do_ds
+        self.network.do_ds = True
+        ret = super().run_TE_training_v2(self.dl_tr.counter, norm, epsilon)#pass the number of samples in training set
+        self.network.do_ds = ds
+        return ret 
+
     def run_TRADES_training(self):
         """
         if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
@@ -933,6 +1009,22 @@ class nnUNetTrainerV2(nnUNetTrainer):
         ds = self.network.do_ds
         self.network.do_ds = True
         ret = super().run_TRADES_training(self.dl_tr.counter)#pass the number of samples in training set
+        self.network.do_ds = ds
+        return ret
+    
+    def run_TRADES_training_v2(self, norm, epsilon):# str and float
+        """
+        if we run with -c then we need to set the correct lr for the first epoch, otherwise it will run the first
+        continued epoch with self.initial_lr
+
+        we also need to make sure deep supervision in the network is enabled for training, thus the wrapper
+        :return:
+        """
+        self.maybe_update_lr(self.epoch)  # if we dont overwrite epoch then self.epoch+1 is used which is not what we
+        # want at the start of the training
+        ds = self.network.do_ds
+        self.network.do_ds = True
+        ret = super().run_TRADES_training_v2(self.dl_tr.counter, norm, epsilon)#pass the number of samples in training set
         self.network.do_ds = ds
         return ret
   

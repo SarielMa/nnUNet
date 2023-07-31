@@ -32,13 +32,16 @@ from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 
 def maybe_mkdir_p(directory: str) -> None:
     os.makedirs(directory, exist_ok=True)
+    
+    
 
-def main():
+
+def main(params):
     parser = argparse.ArgumentParser()
     
     #parser.add_argument("network")
     #parser.add_argument("network_trainer")
-    parser.add_argument("--task", help="can be task name or task id")
+    parser.add_argument("--task", default = params.task, help="can be task name or task id")
     #parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
     
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
@@ -108,7 +111,7 @@ def main():
     #network_trainer = args.network_trainer
     
     #task = "002"
-    fold = "0"
+    fold = "1"
     network = "2d"
     network_trainer = "nnUNetTrainerV2"
     validation_only = args.validation_only
@@ -191,7 +194,7 @@ def main():
                 # new training without pretraine weights, do nothing
                 pass
 
-            trainer.run_IMA_training()
+            trainer.run_IMA_training_grid(params)
         else:
             if valbest:
                 trainer.load_best_checkpoint(train=False)
@@ -210,6 +213,76 @@ def main():
             predict_next_stage(trainer, join(dataset_directory, trainer.plans['data_identifier'] + "_stage%d" % 1))
 
 
+
+class IMA_params_D2:# for D2 
+    def __init__(self, noise, delta):           
+        #used to pass parameters to ima iteration
+        self.task = "002"
+        self.noise = noise #25
+        self.norm_type = 2
+        self.alpha = 4
+        self.max_iter = 20
+        self.stop = 1
+        self.refine_Xn_max_iter = 10
+        self.beta = 0.5
+        self.beta_position =1
+        self.E = 0
+        self.epoch_refine = 10
+        self.delta = delta #5
+        self.model_eval_attack=0
+        self.model_eval_Xn=0
+        self.model_Xn_advc_p=0
+        self.Xn1_equal_X =0
+        self.Xn2_equal_Xn =0
+        self.pgd_replace_Y_with_Yp=0   
+        self.title = "IMA"+self.task
+
+class IMA_params_D4:# for D4
+    def __init__(self, noise, delta):           
+        #used to pass parameters to ima iteration
+        self.task = "004"
+        self.noise = noise #15
+        self.norm_type = 2
+        self.alpha = 4
+        self.max_iter = 20
+        self.stop = 1
+        self.refine_Xn_max_iter = 10
+        self.beta = 0.5#1/6 for thre = 0.5
+        self.beta_position =1
+        self.E = 0
+        self.epoch_refine = 10
+        self.delta = delta #2.5
+        self.model_eval_attack=0
+        self.model_eval_Xn=0
+        self.model_Xn_advc_p=0
+        self.Xn1_equal_X =0
+        self.Xn2_equal_Xn =0
+        self.pgd_replace_Y_with_Yp=0 
+        self.title = "IMA"+self.task
+        
+class IMA_params_D5:# for D5
+    def __init__(self, noise, delta):           
+        #used to pass parameters to ima iteration
+        self.task = "005"
+        self.noise = noise #40
+        self.norm_type = 2
+        self.alpha = 4
+        self.max_iter = 20
+        self.stop = 1 #0 for AMAT and 1 for IMA
+        self.refine_Xn_max_iter = 10
+        self.beta = 0.5
+        self.beta_position =1
+        self.E = 0
+        self.epoch_refine = 10
+        self.delta = delta #10
+        self.model_eval_attack=0
+        self.model_eval_Xn=0
+        self.model_Xn_advc_p=0
+        self.Xn1_equal_X =0
+        self.Xn2_equal_Xn =0
+        self.pgd_replace_Y_with_Yp=0 
+        self.title = "IMA"+self.task
+
 if __name__ == "__main__":
     #os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(f'{i}' for i in range(torch.cuda.device_count()))
     #torch.cuda.is_available()
@@ -218,5 +291,19 @@ if __name__ == "__main__":
     #freeze_support()
 
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
-    os.environ["CUDA_VISIBLE_DEVICES"]="2"
-    main()
+    os.environ["CUDA_VISIBLE_DEVICES"]="1"
+    # D2
+    for noise in [15,20,25,30,35]:
+        for delta in [3,4,5,6,7]:
+            main(IMA_params_D2(noise, delta))
+    """     
+    # D4
+    for noise in [9,12,15,18,21]:
+        for delta in [1.5,2.0,2.5,3.0,3.5]:
+            main(IMA_params_D4(noise, delta))
+
+    # D5
+    for noise in [20,30,40,50,60]:
+        for delta in [5,7.5,10,12.5,15]:
+            main(IMA_params_D5(noise, delta))
+    """

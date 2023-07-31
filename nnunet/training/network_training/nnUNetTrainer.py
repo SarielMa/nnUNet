@@ -327,7 +327,15 @@ class nnUNetTrainer(NetworkTrainer):
         
     def run_TRADES_training(self, counter):
         self.save_debug_information()
-        super(nnUNetTrainer, self).run_TRADES_training(counter)       
+        super(nnUNetTrainer, self).run_TRADES_training(counter)   
+        
+    def run_TE_training_v2(self, counter, norm, epsilon):
+        self.save_debug_information()
+        super(nnUNetTrainer, self).run_TE_training_v2(counter, norm, epsilon) 
+        
+    def run_TRADES_training_v2(self, counter, norm, epsilon):
+        self.save_debug_information()
+        super(nnUNetTrainer, self).run_TRADES_training_v2(counter, norm, epsilon) 
 
     def run_IMA_training(self, counter):
         self.save_debug_information()
@@ -345,9 +353,9 @@ class nnUNetTrainer(NetworkTrainer):
         self.save_debug_information()
         return super(nnUNetTrainer, self).run_validate_adv(noise, norm_type)
     
-    def run_validate_adv_cmpb(self, noise, norm_type):
+    def run_validate_adv_cmpb(self, noise, norm_type, attack):
         self.save_debug_information()
-        return super(nnUNetTrainer, self).run_validate_adv_cmpb(noise, norm_type)
+        return super(nnUNetTrainer, self).run_validate_adv_cmpb(noise, norm_type, attack)
     
     def run_validate_white(self, noise, norm_type):
         self.save_debug_information()

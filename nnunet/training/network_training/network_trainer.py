@@ -791,7 +791,7 @@ class NetworkTrainer(object):
 
         while self.epoch < self.max_num_epochs:
             self.print_to_log_file("\nepoch: ", self.epoch)
-            epoch_start_time = time()
+            #epoch_start_time = time()
             train_losses_epoch = []
             #----------------------------
             flag1=torch.zeros(len(args.E), dtype=torch.float32)
@@ -799,12 +799,17 @@ class NetworkTrainer(object):
             E_new=args.E.detach().clone()
             #---------------------------
             # train one epoch
+            import time
+            t1 = time.time()
             self.network.train()
             for c in range(self.num_batches_per_epoch):
             #for c in range(1):
                 l, flag1, flag2, E_new = self.run_IMA_iteration(self.tr_gen, args,flag1, flag2, E_new, True)
                 #print("batch ",c,"finished")
                 train_losses_epoch.append(l)
+            timecost = time.time()
+            print("++++time cost is ", timecost)
+            print ("hours is ", timecost/3600 * 50)
             # one epoch finished
             self.all_tr_losses.append(np.mean(train_losses_epoch))
             self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
@@ -850,7 +855,7 @@ class NetworkTrainer(object):
             #    break
 
             self.epoch += 1
-            print ("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
+            #print ("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
 
         self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
 
@@ -902,11 +907,16 @@ class NetworkTrainer(object):
             E_new=args.E.detach().clone()
             #---------------------------
             # train one epoch
+            import time
+            t1 = time.time()
             self.network.train()
             for c in range(self.num_batches_per_epoch):
                 l, flag1, flag2, E_new = self.run_IMA_iteration(self.tr_gen, args,flag1, flag2, E_new, True)
                 #print("batch ",c,"finished")
                 train_losses_epoch.append(l)
+            timecost = time.time()
+            print("++++time cost is ", timecost)
+            print ("hours is ", timecost/3600 * 50)
             # one epoch finished
             self.all_tr_losses.append(np.mean(train_losses_epoch))
             self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
@@ -1046,7 +1056,94 @@ class NetworkTrainer(object):
         if isfile(join(self.output_folder, "model_TRADES_latest.model")):
             os.remove(join(self.output_folder, "model_TRADES_latest.model"))
         if isfile(join(self.output_folder, "model_TRADES_latest.model.pkl")):
-            os.remove(join(self.output_folder, "model_TRADES_latest.model.pkl"))        
+            os.remove(join(self.output_folder, "model_TRADES_latest.model.pkl"))    
+            
+            
+    def run_TRADES_training_v2(self, counter, norm, epsilon):
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+
+        _ = self.tr_gen.next()
+        _ = self.val_gen.next()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+        maybe_mkdir_p(self.output_folder)        
+        #self.plot_network_architecture()
+
+        # config IMA parameters
+        #######################################################################################
+        title = "TRADES_b6_ep"+str(epsilon)
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        while self.epoch < self.max_num_epochs:
+            self.print_to_log_file("\nepoch: ", self.epoch)
+            epoch_start_time = time()
+            train_losses_epoch = []
+            #----------------------------
+            # train one epoch
+            self.network.train()
+            for c in range(self.num_batches_per_epoch):
+                l = self.run_TRADES_iteration_v2(self.tr_gen, norm, epsilon, True)
+                #print("batch ",c,"finished")
+                train_losses_epoch.append(l)
+            # one epoch finished
+            self.all_tr_losses.append(np.mean(train_losses_epoch))
+            self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
+            #------          
+            with torch.no_grad():
+                # validation with train=False
+                self.network.eval()
+                val_losses = []
+                # run one epoch.....
+                for b in range(self.num_val_batches_per_epoch):
+                    l = self.run_iteration(self.val_gen, False, True)
+                    val_losses.append(l)
+   
+                self.all_val_losses.append(np.mean(val_losses))
+                self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
+
+                if self.also_val_in_tr_mode:
+                    self.network.train()
+                    # validation with train=True
+                    val_losses = []
+                    for b in range(self.num_val_batches_per_epoch):
+                        l = self.run_iteration(self.val_gen, False)
+                        val_losses.append(l)
+                    self.all_val_losses_tr_mode.append(np.mean(val_losses))
+                    self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
+            
+
+            self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
+
+            continue_training = self.on_epoch_end()
+
+            epoch_end_time = time()
+
+            if not continue_training:
+                # allows for early stopping
+                break
+
+            self.epoch += 1
+            self.print_to_log_file("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
+
+        self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
+
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_"+title+"_final_checkpoint.model"))
+        # now we can delete latest as it will be identical with final
+        if isfile(join(self.output_folder, "model_TRADES_latest.model")):
+            os.remove(join(self.output_folder, "model_TRADES_latest.model"))
+        if isfile(join(self.output_folder, "model_TRADES_latest.model.pkl")):
+            os.remove(join(self.output_folder, "model_TRADES_latest.model.pkl"))    
 
     def run_TE_training(self, counter):
         if not torch.cuda.is_available():
@@ -1169,6 +1266,128 @@ class NetworkTrainer(object):
         if isfile(join(self.output_folder, "model_TRADES_latest.model.pkl")):
             os.remove(join(self.output_folder, "model_TRADES_latest.model.pkl"))
 
+    def run_TE_training_v2(self, counter, norm, epsilon):
+        if not torch.cuda.is_available():
+            self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
+
+        _ = self.tr_gen.next()
+        _ = self.val_gen.next()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        self._maybe_init_amp()
+
+        maybe_mkdir_p(self.output_folder)        
+        #ramp up function
+        def sigmoid_rampup(current, start_es, end_es):
+            """Exponential rampup from https://arxiv.org/abs/1610.02242"""
+            if current < start_es:
+                return 0.0
+            if current > end_es:
+                return 1.0
+            else:
+                import math
+                phase = 1.0 - (current - start_es) / (end_es - start_es)
+                return math.exp(-5.0 * phase * phase)
+        title = "TE_ep"+str(epsilon)
+        if cudnn.benchmark and cudnn.deterministic:
+            warn("torch.backends.cudnn.deterministic is True indicating a deterministic training is desired. "
+                 "But torch.backends.cudnn.benchmark is True as well and this will prevent deterministic training! "
+                 "If you want deterministic then set benchmark=False")
+        #config TE parameters
+        from nnunet.TE.loss import PGD_TE
+        task = self.dataset_directory.split("\\")[-1]
+        """
+        epsilon = None
+        if "002" in task:
+            epsilon = 20#cannot converge
+        elif "004" in task:
+            epsilon = 15#cannot converge
+        elif "005" in task:
+            epsilon = 40#cannot converge
+        else:
+            raise Exception("Not supported task id")
+        """
+            
+        
+        es_start = 0 * self.max_num_epochs
+        es_end = 0.7 * self.max_num_epochs
+        pgd_te = PGD_TE(  loss_fn = self.loss,
+                           multioutput_weights = self.ds_loss_weights,
+                           num_samples = counter,
+                           momentum=0.9,
+                           step_size=epsilon/4,
+                           epsilon= epsilon,
+                           perturb_steps=10,
+                           norm = norm,
+                           es= es_start)
+
+        if not self.was_initialized:
+            self.initialize(True)
+
+        while self.epoch < self.max_num_epochs:
+            self.print_to_log_file("\nepoch: ", self.epoch)
+            epoch_start_time = time()
+            train_losses_epoch = []
+            #----------------------------
+            # compute the weight
+            rampup_rate = sigmoid_rampup(self.epoch, es_start, es_end)
+            weight = rampup_rate * 300
+            self.network.train()
+            # train one iteration
+            for c in range(self.num_batches_per_epoch):
+                l = self.run_TE_iteration( pgd_te, self.tr_gen,  self.epoch, weight, True)
+                #print("batch ",c,"finished")
+                train_losses_epoch.append(l)
+            # one epoch finished
+            self.all_tr_losses.append(np.mean(train_losses_epoch))
+            self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
+            #------          
+            with torch.no_grad():
+                # validation with train=False
+                self.network.eval()
+                val_losses = []
+                # run one epoch.....
+                for b in range(self.num_val_batches_per_epoch):
+                    l = self.run_iteration(self.val_gen, False, True)
+                    val_losses.append(l)
+   
+                self.all_val_losses.append(np.mean(val_losses))
+                self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
+
+                if self.also_val_in_tr_mode:
+                    self.network.train()
+                    # validation with train=True
+                    val_losses = []
+                    for b in range(self.num_val_batches_per_epoch):
+                        l = self.run_iteration(self.val_gen, False)
+                        val_losses.append(l)
+                    self.all_val_losses_tr_mode.append(np.mean(val_losses))
+                    self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
+            
+
+            self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
+
+            continue_training = self.on_epoch_end()
+
+            epoch_end_time = time()
+
+            if not continue_training:
+                # allows for early stopping
+                break
+
+            self.epoch += 1
+            self.print_to_log_file("This epoch took %f s\n" % (epoch_end_time - epoch_start_time))
+
+        self.epoch -= 1  # if we don't do this we can get a problem with loading model_final_checkpoint.
+
+        if self.save_final_checkpoint: self.save_checkpoint(join(self.output_folder, "model_"+title+"_final_checkpoint.model"))
+        # now we can delete latest as it will be identical with final
+        if isfile(join(self.output_folder, "model_TRADES_latest.model")):
+            os.remove(join(self.output_folder, "model_TRADES_latest.model"))
+        if isfile(join(self.output_folder, "model_TRADES_latest.model.pkl")):
+            os.remove(join(self.output_folder, "model_TRADES_latest.model.pkl"))
 
     def maybe_update_lr(self):
         # maybe update learning rate
@@ -1540,96 +1759,7 @@ class NetworkTrainer(object):
     def uniform_white_attack(self, ):
         pass
     
-    def pgd_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
-                   rand_init=True, rand_init_norm=None, targeted=False,
-                   clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
-        #-----------------------------------------------------
-        if loss_fn is None :
-            raise ValueError('loss_fn is unkown')
-        #-----------------
-        X = X.detach()
-        #-----------------
-        if rand_init == True:
-            init_norm=rand_init_norm
-            if rand_init_norm is None:
-                init_norm=noise_norm
-            noise_init=self.get_noise_init(norm_type, noise_norm, init_norm, X)
-            Xn = X + noise_init
-        else:
-            Xn = X.clone().detach() # must clone
-        #-----------------
-        noise_new=(Xn-X).detach()
-        if use_optimizer == True:
-            optimizer = optim.Adamax([noise_new], lr=step)
-        #-----------------
-        for n in range(0, max_iter):
-            Xn = Xn.detach()
-            Xn.requires_grad = True
-            Zn = model(Xn)
-            loss = loss_fn(Zn, Y)
-            #---------------------------
-            if targeted == True:
-                loss=-loss
-            #---------------------------
-            #loss.backward() will update W.grad
-            grad_n=torch.autograd.grad(loss, Xn)[0]
-            grad_n=self.normalize_grad_(grad_n, norm_type)
-            if use_optimizer == True:
-                noise_new.grad=-grad_n.detach() #grad ascent to maximize loss
-                optimizer.step()
-            else:
-                Xnew = Xn.detach() + step*grad_n.detach()
-                noise_new = Xnew-X
-            #---------------------
-            self.clip_norm_(noise_new, norm_type, noise_norm)
-            Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
-            Xn = X+noise_new
-            noise_new.data -= noise_new.data-(Xn-X).data
-            Xn=Xn.detach()
-        #---------------------------
-        return Xn
-    
-    def ifgsm_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
-                   rand_init=True, rand_init_norm=None, targeted=False,
-                   clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
-        #-----------------------------------------------------
-        if loss_fn is None :
-            raise ValueError('loss_fn is unkown')
-        #-----------------
-        X = X.detach()
-        #-----------------
-        Xn = X.clone().detach() # must clone
-        #-----------------
-        noise_new=(Xn-X).detach()
-        if use_optimizer == True:
-            optimizer = optim.Adamax([noise_new], lr=step)
-        #-----------------
-        for n in range(0, max_iter):
-            Xn = Xn.detach()
-            Xn.requires_grad = True
-            Zn = model(Xn)
-            loss = loss_fn(Zn, Y)
-            #---------------------------
-            if targeted == True:
-                loss=-loss
-            #---------------------------
-            #loss.backward() will update W.grad
-            grad_n=torch.autograd.grad(loss, Xn)[0]
-            grad_n=self.normalize_grad_(grad_n, norm_type)
-            if use_optimizer == True:
-                noise_new.grad=-grad_n.detach() #grad ascent to maximize loss
-                optimizer.step()
-            else:
-                Xnew = Xn.detach() + step*grad_n.detach()
-                noise_new = Xnew-X
-            #---------------------
-            self.clip_norm_(noise_new, norm_type, noise_norm)
-            #Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
-            Xn = X+noise_new
-            noise_new.data -= noise_new.data-(Xn-X).data
-            Xn=Xn.detach()
-        #---------------------------
-        return Xn
+
 #%% adversarial part
 
     def maskIt(self, x):
@@ -2176,7 +2306,96 @@ class NetworkTrainer(object):
     
 #%% run test for cmpb revision
 
-
+    def pgd_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
+                   rand_init=True, rand_init_norm=None, targeted=False,
+                   clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
+        #-----------------------------------------------------
+        if loss_fn is None :
+            raise ValueError('loss_fn is unkown')
+        #-----------------
+        X = X.detach()
+        #-----------------
+        if rand_init == True:
+            init_norm=rand_init_norm
+            if rand_init_norm is None:
+                init_norm=noise_norm
+            noise_init=self.get_noise_init(norm_type, noise_norm, init_norm, X)
+            Xn = X + noise_init
+        else:
+            Xn = X.clone().detach() # must clone
+        #-----------------
+        noise_new=(Xn-X).detach()
+        if use_optimizer == True:
+            optimizer = optim.Adamax([noise_new], lr=step)
+        #-----------------
+        for n in range(0, max_iter):
+            Xn = Xn.detach()
+            Xn.requires_grad = True
+            Zn = model(Xn)
+            loss = loss_fn(Zn, Y)
+            #---------------------------
+            if targeted == True:
+                loss=-loss
+            #---------------------------
+            #loss.backward() will update W.grad
+            grad_n=torch.autograd.grad(loss, Xn)[0]
+            grad_n=self.normalize_grad_(grad_n, norm_type)
+            if use_optimizer == True:
+                noise_new.grad=-grad_n.detach() #grad ascent to maximize loss
+                optimizer.step()
+            else:
+                Xnew = Xn.detach() + step*grad_n.detach()
+                noise_new = Xnew-X
+            #---------------------
+            self.clip_norm_(noise_new, norm_type, noise_norm)
+            #Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+            Xn = X+noise_new
+            noise_new.data -= noise_new.data-(Xn-X).data
+            Xn=Xn.detach()
+        #---------------------------
+        return Xn
+    
+    def ifgsm_attack(self,model, X, Y, noise_norm, norm_type, max_iter, step,
+                   rand_init=True, rand_init_norm=None, targeted=False,
+                   clip_X_min=0, clip_X_max=1, use_optimizer=False, loss_fn=None):
+        #-----------------------------------------------------
+        if loss_fn is None :
+            raise ValueError('loss_fn is unkown')
+        #-----------------
+        X = X.detach()
+        #-----------------
+        Xn = X.clone().detach() # must clone
+        #-----------------
+        noise_new=(Xn-X).detach()
+        if use_optimizer == True:
+            optimizer = optim.Adamax([noise_new], lr=step)
+        #-----------------
+        for n in range(0, max_iter):
+            Xn = Xn.detach()
+            Xn.requires_grad = True
+            Zn = model(Xn)
+            loss = loss_fn(Zn, Y)
+            #---------------------------
+            if targeted == True:
+                loss=-loss
+            #---------------------------
+            #loss.backward() will update W.grad
+            grad_n=torch.autograd.grad(loss, Xn)[0]
+            grad_n=self.normalize_grad_(grad_n, norm_type)
+            if use_optimizer == True:
+                noise_new.grad=-grad_n.detach() #grad ascent to maximize loss
+                optimizer.step()
+            else:
+                Xnew = Xn.detach() + step*grad_n.detach()
+                noise_new = Xnew-X
+            #---------------------
+            self.clip_norm_(noise_new, norm_type, noise_norm)
+            #Xn = torch.clamp(X+noise_new, clip_X_min, clip_X_max)
+            Xn = X+noise_new
+            noise_new.data -= noise_new.data-(Xn-X).data
+            Xn=Xn.detach()
+        #---------------------------
+        return Xn
     def run_one_adv_ifgsm(self, data_dict, noise, norm_type, max_iter):
         self.network.eval()
         #data_dict = next(data_generator)
@@ -2187,15 +2406,17 @@ class NetworkTrainer(object):
         
         if torch.cuda.is_available():
             data = to_cuda(data)
-            target = to_cuda(target)
-        
+            target = to_cuda(target)        
         self.optimizer.zero_grad()
         Xn = 0
+        stepsize = noise
+        if max_iter > 1:
+            stepsize = 4*noise/max_iter
+            
         if noise == 0:
             Xn = data
         else:
-            #Xn = self.pgd_attack(self.network, data, target, noise, 2, 100, 0.05*noise, use_optimizer=False, loss_fn=self.loss)
-            Xn = self.ifgsm_attack(self.network, data, target, noise, norm_type, max_iter, 4 * noise/max_iter, use_optimizer=False, loss_fn=self.loss)
+            Xn = self.ifgsm_attack(self.network, data, target, noise, norm_type, max_iter, stepsize, use_optimizer=False, loss_fn=self.loss)
         #ret = 0
         #valDice = DiceIndex()
         with torch.no_grad():
@@ -2219,10 +2440,14 @@ class NetworkTrainer(object):
         
         self.optimizer.zero_grad()
         Xn = 0
+        stepsize = noise
+        if max_iter > 1:
+            stepsize = 4*noise/max_iter
+        
         if noise == 0:
             Xn = data
         else:
-            Xn = self.pgd_attack(self.network, data, target, noise, norm_type, max_iter, 4 * noise/max_iter, use_optimizer=False, loss_fn=self.loss)
+            Xn = self.pgd_attack(self.network, data, target, noise, norm_type, max_iter, stepsize, use_optimizer=False, loss_fn=self.loss)
         
         #ret = 0
         #valDice = DiceIndex()
@@ -2232,9 +2457,9 @@ class NetworkTrainer(object):
             self.my_run_online_evaluation(output, target)         
         del target   
         #return ret.cpu().numpy()
-    
-    def run_validate_adv_cmpb(self, noise, norm_type):
-        print ("+++++++++++++++++noise ",str(noise)," is running, (IFGSM and PGD)+++++++++++++++++++++++++++++++")
+
+    def run_validate_adv_cmpb(self, noise, norm_type, attack):
+        print ("+++++++++++++++++noise ",str(noise)," is running, (cmpb)+++++++++++++++++++++++++++++++")
         if not torch.cuda.is_available():
             self.print_to_log_file("WARNING!!! You are attempting to run training on a CPU (torch.cuda.is_available() is False). This can be VERY slow!")
         if torch.cuda.is_available():
@@ -2250,52 +2475,32 @@ class NetworkTrainer(object):
         counter = 1
         epoch_start_time = time()
         self.network.eval()
-        print ("FGSM evaluating is running")
-        for data_dict in self.ts_gen:
-            #check if this target has no foregroud classes, if yes, ignore it
-            target = data_dict['target']
-            temp = target[0]
-            if temp.max()==0:
-                continue
-            self.run_one_adv_ifgsm(data_dict, noise, norm_type, max_iter = 1)
-            if data_dict['last']:
-                break
-            counter +=1
-        ret1 = self.my_finish_online_evaluation()
-        val1 = np.mean(ret1)
         
-        print ("IFGSM evaluating is running")
+        print (attack + " evaluating is running")
         for data_dict in self.ts_gen:
             #check if this target has no foregroud classes, if yes, ignore it
             target = data_dict['target']
             temp = target[0]
             if temp.max()==0:
                 continue
-            self.run_one_adv_ifgsm(data_dict, noise, norm_type, max_iter = 10)
-            if data_dict['last']:
-                break
-            counter +=1
-        ret2 = self.my_finish_online_evaluation()
-        val2 = np.mean(ret2)
-        
-        print ("PGD evaluatiing is running")
-        for data_dict in self.ts_gen:
-            #check if this target has no foregroud classes, if yes, ignore it
-            target = data_dict['target']
-            temp = target[0]
-            if temp.max()==0:
-                continue
-            self.run_one_adv_pgd(data_dict, noise, norm_type, max_iter = 10)
+            if attack == "fgsm":
+                self.run_one_adv_ifgsm(data_dict, noise, norm_type, max_iter = 1)
+            elif attack == "ifgsm":
+                self.run_one_adv_ifgsm(data_dict, noise, norm_type, max_iter = 10)
+            elif attack == "pgd":
+                self.run_one_adv_pgd(data_dict, noise, norm_type, max_iter = 10)
+            else:
+                raise Exception("Sorry, attack not supported")
+                
             if data_dict['last']:
                 break
             counter +=1
         ret3 = self.my_finish_online_evaluation()
-        val3 = np.mean(ret3)
-        
+        val3 = np.mean(ret3)        
         epoch_end_time = time()
         self.print_to_log_file("This validate took %f s\n" % (epoch_end_time - epoch_start_time))
-        return  val1, val2, val3
-
+        return  val3
+    
 #%% adversarial part   
     def run_validate_sample_wise(self, noise):
         print ("+++++++++++++++++noise ",str(noise)," is running+++++++++++++++++++++++++++++++")
