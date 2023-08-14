@@ -1086,7 +1086,7 @@ class NetworkTrainer(object):
             self.initialize(True)
 
         while self.epoch < self.max_num_epochs:
-            self.print_to_log_file("\nepoch: ", self.epoch)
+            self.print_to_log_file("\nepoch (TRADES): ", self.epoch)
             epoch_start_time = time()
             train_losses_epoch = []
             #----------------------------
@@ -2279,9 +2279,9 @@ class NetworkTrainer(object):
             
             #finishe check
             print ("IFGSM evaluating is running")
-            avgIFGSM.append(self.run_one_adv_ifgsm(data_dict, noise))
+            avgIFGSM.append(self.run_one_adv_ifgsm_spie2024(data_dict, noise))
             print ("PGD evaluatiing is running")
-            avgPGD.append(self.run_one_adv(data_dict, noise))
+            avgPGD.append(self.run_one_adv_pgd_spie2024(data_dict, noise))
             
             if data_dict['last']:
                 break
@@ -2457,6 +2457,68 @@ class NetworkTrainer(object):
             self.my_run_online_evaluation(output, target)         
         del target   
         #return ret.cpu().numpy()
+        
+    def run_one_adv_ifgsm_spie2024(self, data_dict, noise, norm_type = 2, max_iter = 10):
+        self.network.eval()
+        #data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']# target is a mask, but should have two...
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)# only the first target among the six is useful
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)        
+        self.optimizer.zero_grad()
+        Xn = 0
+        stepsize = noise
+        if max_iter > 1:
+            stepsize = 4*noise/max_iter
+            
+        if noise == 0:
+            Xn = data
+        else:
+            Xn = self.ifgsm_attack(self.network, data, target, noise, norm_type, max_iter, stepsize, use_optimizer=False, loss_fn=self.loss)
+        ret = 0
+        #valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            ret = self.getOnlineDiceMeanOnlyDoubleClass(output[0], target[0])
+            self.my_run_online_evaluation(output, target)         
+        del target   
+        return ret.cpu().numpy()
+
+    def run_one_adv_pgd_spie2024(self, data_dict, noise, norm_type = 2, max_iter = 100):
+        self.network.eval()
+        #data_dict = next(data_generator)
+        data = data_dict['data']
+        target = data_dict['target']# target is a mask, but should have two...
+        data = maybe_to_torch(data)
+        target = maybe_to_torch(target)# only the first target among the six is useful
+        
+        if torch.cuda.is_available():
+            data = to_cuda(data)
+            target = to_cuda(target)
+        
+        self.optimizer.zero_grad()
+        Xn = 0
+        stepsize = noise
+        if max_iter > 1:
+            stepsize = 4*noise/max_iter
+        
+        if noise == 0:
+            Xn = data
+        else:
+            Xn = self.pgd_attack(self.network, data, target, noise, norm_type, max_iter, stepsize, use_optimizer=False, loss_fn=self.loss)
+        
+        ret = 0
+        #valDice = DiceIndex()
+        with torch.no_grad():
+            output = self.network(Xn)
+            ret = self.getOnlineDiceMean(output[0], target[0])
+            self.my_run_online_evaluation(output, target)         
+        del target
+        return ret.cpu().numpy()
 
     def run_validate_adv_cmpb(self, noise, norm_type, attack):
         print ("+++++++++++++++++noise ",str(noise)," is running, (cmpb)+++++++++++++++++++++++++++++++")

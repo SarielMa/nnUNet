@@ -183,7 +183,9 @@ def main(noise, filename, taskid):
 
 
     trainer.my_load_final_checkpoint(filename, train=False)
-    return trainer.run_validate_adv_IFGSM(noise)
+
+    return trainer.run_validate_adv_IFGSM(noise) # return 
+
     
       
 
@@ -198,121 +200,70 @@ if __name__ == "__main__":
     import random
     random.seed(10)
     ##########################need to be configured############################
-    base = "C:/Research/IMA_on_segmentation"
-    choice = 2
+    choice = 0
+    
     ###########################################################################
     #dataset name
-    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate","Task009_Spleen"]
+    dataset = ["Task002_Heart","Task004_Hippocampus","Task005_Prostate"]
     selected = dataset[choice]
     # noise name
+    #methods names
+    #,"IMA", "TRADES","TE","PGD"
+    #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
+    netDict = [["TE5", "TE10", "TE15"],#D2
+                ["STD","IMA", "TRADES","TE"],#D4
+                ["IMA", "TRADES","TE","PGD","STD"],#D5
+                ]
+        
+    nets = netDict[choice]
+    folderDict = [] 
+    #D2
+    folders2 = ["result202307/model_TE_ep5.0_final_checkpoint.model",
+                "result202307/model_TE_ep10.0_final_checkpoint.model",
+                "result202307/model_TE_ep15.0_final_checkpoint.model",]
+    
+
+
+    folderDict.append(folders2)
+
+    folders = folderDict[choice]
+    import os
+    for model in folders:
+        assert os.path.exists(model)
+    #basePath = base+"/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
     noiseDict =[[0,5,10,15],#D2
                 [0,2,6,10],#D4 
                 [0,10,20,40],#D5
                 [0,10,50,90]]#D9 
     noises = noiseDict[choice]
-    #methods names
-    #["IMA15","PGD15","PGD5","PGD1","nnUnet"],#D4
-    netDict = [["AMAT", "PGD25","PGD15","PGD5","STD"],#D2
-                ["AMAT","PGD15","PGD10","PGD5","PGD1","STD"],#D4
-                ["AMAT","PGD40","PGD20","PGD10","STD"],#D5
-                ["IMA90","PGD90","PGD40","PGD10","nnUnet"]#D9
-                ]
-        
-    nets = netDict[choice]
-    #
-    folderDict = []
-    
-    #D2
-    folders2 = ["AMATMean50/model_AMAT002_N_inf_D_5_final_checkpoint.model",               
-               "AMATMean50/model_PGD25_final_checkpoint.model",
-               "AMATMean50/model_PGD15_final_checkpoint.model",
-               "AMATMean50/model_PGD5_final_checkpoint.model",
-               "AMATMean50/model_final_checkpoint.model"]
-    #D4   
-    folders4 = [
-               "AMATMean100/model_AMAT004_N_inf_D_0.5_final_checkpoint.model",
-               "AMATMean100/model_PGD15_final_checkpoint.model",
-               "AMATMean100/model_PGD10_final_checkpoint.model",
-               "AMATMean100/model_PGD5_final_checkpoint.model",
-               "AMATMean100/model_PGD1_final_checkpoint.model",
-               "AMATMean100/model_final_checkpoint.model"
-               ]
-    #D5   
-    folders5 = ["AMATMean50/model_AMAT005_N_inf_D_3_final_checkpoint.model",
-                "AMATMean50/model_PGD40_final_checkpoint.model",
-                
-               
-               "AMATMean50/model_PGD20_final_checkpoint.model",
-               "AMATMean50/model_PGD10_final_checkpoint.model",
-               "AMATMean50/model_final_checkpoint.model"]  
-
-    
-    #D9
-    folders9 = ["fold_0_nnUnet/model_IMA_060_90_final_checkpoint.model",
-                "fold_0_nnUnet/model_PGD90_final_checkpoint.model",
-                "fold_0_nnUnet/model_PGD40_final_checkpoint.model",
-                "fold_0_nnUnet/model_PGD10_final_checkpoint.model",
-                "fold_0_nnUnet/model_final_checkpoint.model"
-                ]
-    folderDict.append(folders2)
-    folderDict.append(folders4)
-    folderDict.append(folders5)
-    folderDict.append(folders9)
-    folders = folderDict[choice]
-
-    
-    basePath = base+"/nnUnet/nnUNet/resultFolder/nnUNet/2d/"+selected+"/nnUNetTrainerV2__nnUNetPlansv2.1"
-
-    
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111)
-    fig2 = plt.figure(figsize=(10, 8))
-    ax2 = fig2.add_subplot(111)    
-    cols = ['b','g','r','y','k','m','c']
-    yAxises = []
-    yAxises2 = []
+    noises = [5]    
     fields = ["noise"]+[str(i) for i in noises]
     rows1 = []
     rows2 = []
+    yAxises = []
+    yAxises2 = []
     for i, net in enumerate(nets):
         print ("++++++++++++++++++the net is ", net,"++++++++++++++++++++++++++++++")
         for noise in noises:
-            ifgsm, pgd = main(noise, join(basePath, folders[i]), selected[4:7]) 
-            yAxises.append(ifgsm)
-            yAxises2.append(pgd)
-
-        rows1.append([net]+[str(round(ifg,4)) for ifg in yAxises])
-
-        rows2.append([net]+[str(round(pg,4)) for pg in yAxises2])
+            vixelDice,avgDice = main(noise, folders[i], selected[4:7], ) 
+            yAxises.append(vixelDice)
+            yAxises2.append(avgDice)
+        #ax.plot(noises, yAxises, color=cols[i], label=nets[i])
+        rows1.append([net]+[str(round(i,4)) for i in yAxises])
+        #ax2.plot(noises, yAxises2, color=cols[i], label=nets[i])
+        rows2.append([net]+[str(round(i,4)) for i in yAxises2])
         yAxises = []
         yAxises2=[]
 
-    
-    
-    ax.set_title(selected)
-    ax.set_xlabel("noise(L2)")
-    ax.set_ylabel("AVG Dice Index")
-    ax.set_ylim(0,1)
-    ax.set_yticks(np.arange(0, 1.05, step=0.05))
-    ax.legend()
-    ax.grid(True)
-    fig.savefig("AVG_Dice_result_IFGSM_"+selected+".pdf",bbox_inches='tight')
+
     
     with open("AVG_Dice_result_IFGSM_"+selected+".csv",'w') as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(fields)
         csvwriter.writerows(rows1)
-    
-    ax2.set_title(selected)
-    ax2.set_xlabel("noise(L2)")
-    ax2.set_ylabel("AVG Dice Index")
-    ax2.set_ylim(0,1)
-    ax2.set_yticks(np.arange(0, 1.05, step=0.05))
-    ax2.legend()
-    ax2.grid(True)
-    fig2.savefig("AVG_Dice_result_PGD_"+selected+".pdf",bbox_inches='tight')    
+      
 
     with open("AVG_Dice_result_PGD_"+selected+".csv",'w') as csvfile:
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(fields)
-        csvwriter.writerows(rows2)    
+        csvwriter.writerows(rows2)        
